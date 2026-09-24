@@ -6,6 +6,7 @@ import healthRoutes from './routes/health.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import driveRoutes from './routes/drive.routes.js';
 import matchingRoutes from './routes/matching.routes.js';
+import offerRoutes from './routes/offer.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -33,6 +34,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/drives', driveRoutes);
 app.use('/api/matching', matchingRoutes);
+app.use('/api/offers', offerRoutes);
 
 // Fallback 404 handler for unmatched routes
 app.use(notFound);
