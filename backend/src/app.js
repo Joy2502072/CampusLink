@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import healthRoutes from './routes/health.routes.js';
 import studentRoutes from './routes/student.routes.js';
+import driveRoutes from './routes/drive.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -29,6 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 // Base API Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/students', studentRoutes);
+app.use('/api/drives', driveRoutes);
 
 // Fallback 404 handler for unmatched routes
 app.use(notFound);
