@@ -9,6 +9,7 @@ import matchingRoutes from './routes/matching.routes.js';
 import offerRoutes from './routes/offer.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import schedulerRoutes from './routes/scheduler.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -39,6 +40,7 @@ app.use('/api/matching', matchingRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Fallback 404 handler for unmatched routes
 app.use(notFound);
