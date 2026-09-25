@@ -1,7 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
 import { env } from './config/env.js';
+import { securityConfig } from './config/security.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
+import { authenticate } from './middleware/authenticate.js';
+import { authorize } from './middleware/authorize.js';
 import healthRoutes from './routes/health.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import driveRoutes from './routes/drive.routes.js';
@@ -16,31 +19,56 @@ import { errorHandler } from './middleware/errorHandler.js';
 const app = express();
 
 // Security headers
-app.use(helmet());
+app.use(securityHeaders);
 
 // CORS configuration - limited strictly to designated frontend client origin
 app.use(
   cors({
     origin: env.CLIENT_URL,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Demo-User-Role'],
     credentials: true
   })
 );
 
-// Body parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsers with configurable boundaries
+app.use(express.json({ limit: securityConfig.maxJsonSize }));
+app.use(express.urlencoded({ extended: true, limit: securityConfig.maxJsonSize }));
 
-// Base API Routes
+// Public / Candidate exploration routes (unrestricted for student portal & prototype browsing)
 app.use('/api/health', healthRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/drives', driveRoutes);
 app.use('/api/matching', matchingRoutes);
-app.use('/api/offers', offerRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/scheduler', schedulerRoutes);
-app.use('/api/notifications', notificationRoutes);
+
+// Protected routes (require valid demo role credentials and role authorization)
+app.use(
+  '/api/offers',
+  authenticate,
+  authorize('recruiter', 'placement_officer'),
+  offerRoutes
+);
+
+app.use(
+  '/api/analytics',
+  authenticate,
+  authorize('placement_officer'),
+  analyticsRoutes
+);
+
+app.use(
+  '/api/scheduler',
+  authenticate,
+  authorize('placement_officer'),
+  schedulerRoutes
+);
+
+app.use(
+  '/api/notifications',
+  authenticate,
+  authorize('placement_officer'),
+  notificationRoutes
+);
 
 // Fallback 404 handler for unmatched routes
 app.use(notFound);
