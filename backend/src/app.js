@@ -13,6 +13,7 @@ import offerRoutes from './routes/offer.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import schedulerRoutes from './routes/scheduler.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import readinessRoutes from './routes/readiness.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -40,6 +41,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/drives', driveRoutes);
 app.use('/api/matching', matchingRoutes);
+app.use('/api/readiness', readinessRoutes);
 
 // Protected routes (require valid demo role credentials and role authorization)
 app.use(
