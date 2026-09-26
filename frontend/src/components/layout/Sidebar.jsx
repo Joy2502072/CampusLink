@@ -1,34 +1,57 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  CalendarDays, 
-  AlertTriangle, 
-  MessageSquareShare, 
-  GraduationCap, 
-  ShieldCheck, 
-  X 
+import {
+  LayoutDashboard,
+  BarChart3,
+  Calendar,
+  AlertTriangle,
+  GraduationCap,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+  X
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
+export default function Sidebar({
+  activeTab,
+  onSelectTab,
+  isOpen,
+  onClose
+}) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'drives', label: 'Drive Scheduler', icon: CalendarDays },
-    { id: 'at-risk', label: 'At-Risk Students', icon: AlertTriangle },
-    { id: 'communication', label: 'Communication', icon: MessageSquareShare },
-  ];
-
-  const handleSelect = (id) => {
-    onSelectTab(id);
-    if (onClose) {
-      onClose();
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: LayoutDashboard
+    },
+    {
+      id: 'analytics',
+      label: 'Analytics',
+      icon: BarChart3
+    },
+    {
+      id: 'drives',
+      label: 'Drive Scheduler',
+      icon: Calendar
+    },
+    {
+      id: 'at-risk',
+      label: 'At-Risk Students',
+      icon: AlertTriangle
+    },
+    {
+      id: 'readiness',
+      label: 'Student Readiness',
+      icon: GraduationCap
+    },
+    {
+      id: 'communication',
+      label: 'Communication',
+      icon: MessageSquare
     }
-  };
+  ];
 
   return (
     <>
-      {/* Mobile background overlay */}
       {isOpen && (
         <div
           onClick={onClose}
@@ -36,159 +59,322 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
             backdropFilter: 'blur(4px)',
-            zIndex: 35
+            WebkitBackdropFilter: 'blur(4px)',
+            zIndex: 40
           }}
         />
       )}
 
       <aside
-        aria-label="Primary Navigation"
-        className="sidebar-container"
         style={{
           width: '260px',
-          backgroundColor: 'var(--bg-sidebar)',
-          borderRight: '1px solid var(--border-color)',
+          backgroundColor: 'var(--bg-sidebar, #0f172a)',
+          borderRight:
+            '1px solid var(--border-color, #1e293b)',
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          zIndex: 40,
-          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+          minHeight: '100vh',
+          flexShrink: 0,
+          zIndex: 50,
+          boxSizing: 'border-box',
+          ...(isOpen !== undefined
+            ? {
+                position:
+                  window.innerWidth < 1024
+                    ? 'fixed'
+                    : 'relative',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                transform:
+                  window.innerWidth < 1024 && !isOpen
+                    ? 'translateX(-100%)'
+                    : 'translateX(0)',
+                transition:
+                  'transform 0.3s ease-in-out'
+              }
+            : {})
         }}
       >
-        {/* Brand Header */}
-        <div style={{
-          padding: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid var(--border-color)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+        <div
+          style={{
+            height: '76px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px',
+            borderBottom:
+              '1px solid var(--border-color, #1e293b)',
+            flexShrink: 0
+          }}
+        >
+          <div
+            style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 8px 16px -4px rgba(37, 99, 235, 0.4)'
-            }}>
-              <GraduationCap size={22} aria-hidden="true" />
+              gap: '12px'
+            }}
+          >
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background:
+                  'linear-gradient(135deg, var(--accent-blue, #6366f1) 0%, #4f46e5 100%)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: '18px',
+                letterSpacing: '-0.03em',
+                boxShadow:
+                  '0 4px 12px rgba(99, 102, 241, 0.25)'
+              }}
+            >
+              CL
             </div>
+
             <div>
-              <h1 style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '-0.02em', color: '#ffffff' }}>
-                Campus<span style={{ color: 'var(--accent-blue)' }}>Link</span>
-              </h1>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-                Placement Cell Portal
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span
+                  style={{
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    letterSpacing: '-0.01em'
+                  }}
+                >
+                  CampusLink
+                </span>
+
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    padding: '1px 5px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    backgroundColor:
+                      'rgba(99, 102, 241, 0.15)',
+                    color:
+                      'var(--accent-blue, #818cf8)',
+                    border:
+                      '1px solid rgba(99, 102, 241, 0.25)'
+                  }}
+                >
+                  <Sparkles size={10} />
+                  AI
+                </span>
+              </div>
+
+              <p
+                style={{
+                  margin: '2px 0 0 0',
+                  fontSize: '11px',
+                  color:
+                    'var(--text-muted, #64748b)',
+                  fontWeight: 500
+                }}
+              >
+                Placement Management
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="mobile-only"
-            aria-label="Close navigation sidebar"
-            style={{
-              color: 'var(--text-secondary)',
-              padding: '6px',
-              borderRadius: '6px'
-            }}
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close sidebar"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px',
+                color:
+                  'var(--text-muted, #64748b)',
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
-        {/* Navigation Links */}
-        <nav style={{ padding: '20px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ 
-            fontSize: '0.68rem', 
-            fontWeight: 700, 
-            color: 'var(--text-muted)', 
-            textTransform: 'uppercase', 
-            padding: '0 12px 6px',
-            letterSpacing: '0.08em' 
-          }}>
+        <nav
+          aria-label="Control Panel Navigation"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '20px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }}
+        >
+          <div
+            style={{
+              padding: '0 12px 8px 12px',
+              fontSize: '11px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color:
+                'var(--text-muted, #64748b)'
+            }}
+          >
             Control Panel
           </div>
 
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive =
+              activeTab === item.id;
+
             return (
               <button
                 key={item.id}
-                type="button"
-                onClick={() => handleSelect(item.id)}
-                aria-current={isActive ? 'page' : undefined}
+                onClick={() => {
+                  onSelectTab(item.id);
+
+                  if (onClose) {
+                    onClose();
+                  }
+                }}
+                aria-current={
+                  isActive ? 'page' : undefined
+                }
                 style={{
+                  width: '100%',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
-                  padding: '11px 14px',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                  backgroundColor: isActive ? 'var(--accent-blue)' : 'transparent',
-                  transition: 'background-color 0.15s ease, color 0.15s ease',
-                  width: '100%',
-                  textAlign: 'left'
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  backgroundColor: isActive
+                    ? 'var(--accent-blue, #6366f1)'
+                    : 'transparent',
+                  color: isActive
+                    ? '#ffffff'
+                    : 'var(--text-secondary, #94a3b8)',
+                  boxShadow: isActive
+                    ? '0 4px 12px rgba(99, 102, 241, 0.28)'
+                    : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor =
+                      'rgba(30, 41, 59, 0.6)';
+                    e.currentTarget.style.color =
+                      '#f1f5f9';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor =
+                      'transparent';
+                    e.currentTarget.style.color =
+                      'var(--text-secondary, #94a3b8)';
+                  }
                 }}
               >
-                <Icon size={18} aria-hidden="true" style={{ color: isActive ? '#ffffff' : 'var(--text-secondary)' }} />
+                <Icon
+                  color={
+                    isActive
+                      ? '#ffffff'
+                      : 'var(--text-muted, #64748b)'
+                  }
+                  size={18}
+                  style={{
+                    flexShrink: 0
+                  }}
+                />
+
                 <span>{item.label}</span>
-                {isActive && (
-                  <span style={{
-                    marginLeft: 'auto',
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: '#ffffff'
-                  }} />
-                )}
               </button>
             );
           })}
         </nav>
 
-        {/* Simulation Security & Scope Notice */}
-        <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{
-            backgroundColor: 'rgba(15, 23, 42, 0.7)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '10px',
-            padding: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <ShieldCheck size={20} color="var(--accent-emerald)" aria-hidden="true" />
+        <div
+          style={{
+            padding: '16px',
+            borderTop:
+              '1px solid var(--border-color, #1e293b)',
+            flexShrink: 0
+          }}
+        >
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor:
+                'rgba(30, 41, 59, 0.45)',
+              border:
+                '1px solid var(--border-color, #1e293b)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px'
+            }}
+          >
+            <ShieldCheck
+              color="var(--accent-emerald, #10b981)"
+              size={18}
+              style={{
+                flexShrink: 0,
+                marginTop: '1px'
+              }}
+            />
+
             <div>
-              <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f1f5f9' }}>Demo Environment</p>
-              <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Session: 2025-2026 (Mock)</p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#e2e8f0'
+                }}
+              >
+                Demo Environment
+              </p>
+
+              <p
+                style={{
+                  margin: '2px 0 0 0',
+                  fontSize: '11px',
+                  color:
+                    'var(--text-muted, #64748b)',
+                  lineHeight: 1.4
+                }}
+              >
+                Deterministic synthetic data
+                prototype. No production credentials
+                exposed.
+              </p>
             </div>
           </div>
         </div>
       </aside>
-
-      <style>{`
-        @media (min-width: 769px) {
-          .sidebar-container {
-            transform: none !important;
-            position: sticky !important;
-          }
-        }
-      `}</style>
     </>
   );
 }

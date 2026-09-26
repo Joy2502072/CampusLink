@@ -4,6 +4,7 @@ import DashboardHome from './components/dashboard/DashboardHome';
 import AtRiskStudents from './components/atRisk/AtRiskStudents';
 import SchedulerOverview from './components/scheduler/SchedulerOverview';
 import CommunicationHub from './components/communication/CommunicationHub';
+import StudentReadiness from './components/readiness/StudentReadiness';
 import PlaceholderView from './components/common/PlaceholderView';
 
 export default function App() {
@@ -17,6 +18,9 @@ export default function App() {
 
       case 'at-risk':
         return <AtRiskStudents />;
+
+      case 'readiness':
+        return <StudentReadiness />;
 
       case 'drives':
         return <SchedulerOverview />;
