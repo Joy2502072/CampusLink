@@ -1,115 +1,133 @@
 import React from 'react';
-import { Award } from 'lucide-react';
+import { BarChart3, Database } from 'lucide-react';
 
 export default function BranchConversionChart({ data }) {
-  const maxTotal = Math.max(...data.map(d => d.total));
+  const branches = Array.isArray(data) ? data : [];
 
   return (
-    <div style={{
-      backgroundColor: 'var(--bg-card)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '14px',
-      padding: '22px',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '12px' }}>
-        <div>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-            Branch-wise Placement Rate
-          </h3>
-          <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-            Static conversion comparison across 6 academic departments
-          </p>
+    <div
+      style={{
+        backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
+        border: '1px solid var(--border-color, #1e293b)',
+        borderRadius: '12px',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        gap: '20px',
+        boxSizing: 'border-box'
+      }}
+    >
+      {/* Header */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 size={18} color="var(--accent-blue, #818cf8)" />
+            <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.01em' }}>
+              Branch Conversion Comparison
+            </h2>
+          </div>
+
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              fontSize: '10px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              backgroundColor: 'rgba(99, 102, 241, 0.12)',
+              color: 'var(--accent-blue, #818cf8)',
+              border: '1px solid rgba(99, 102, 241, 0.25)'
+            }}
+          >
+            <Database size={10} />
+            Mock Dataset
+          </span>
         </div>
-        <span style={{
-          fontSize: '0.68rem',
-          padding: '3px 8px',
-          borderRadius: '4px',
-          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-          color: 'var(--text-secondary)',
-          fontWeight: 600,
-          whiteSpace: 'nowrap'
-        }}>
-          Mock Dataset
-        </span>
+
+        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)' }}>
+          Backend conversion comparison across academic departments
+        </p>
       </div>
 
-      {/* Visual Bar Breakdown */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, justifyContent: 'center' }}>
-        {data.map((item) => {
-          const totalWidth = (item.total / maxTotal) * 100;
-          const placedRatio = (item.placed / item.total) * 100;
+      {/* Chart Bars List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {branches.length > 0 ? (
+          branches.map((item, idx) => {
+            const branchName = item.branch || item.name || `Branch ${idx + 1}`;
+            const rate = Number(item.placementRate ?? item.rate ?? 0);
+            const clampedRate = Math.min(100, Math.max(0, rate));
 
-          return (
-            <div key={item.branch} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600 }}>
-                <span style={{ color: '#ffffff', width: '50px' }}>{item.branch}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>{item.placed}</strong> / {item.total} Placed
-                </span>
-                <span style={{ color: 'var(--accent-blue)', fontWeight: 700, width: '48px', textAlign: 'right' }}>
-                  {item.rate.toFixed(1)}%
-                </span>
-              </div>
+            return (
+              <div key={branchName} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
+                  <span style={{ color: 'var(--text-primary, #f1f5f9)', fontWeight: 600 }}>
+                    {branchName}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {item.averagePackageLPA && (
+                      <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.75rem' }}>
+                        Avg: {item.averagePackageLPA}
+                      </span>
+                    )}
+                    <span style={{ color: 'var(--accent-blue, #818cf8)', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {clampedRate}%
+                    </span>
+                  </div>
+                </div>
 
-              <div
-                role="progressbar"
-                aria-valuenow={item.placed}
-                aria-valuemin={0}
-                aria-valuemax={item.total}
-                aria-label={`${item.branch} placement progress`}
-                style={{
-                  height: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '9999px',
-                  overflow: 'hidden',
-                  position: 'relative'
-                }}
-              >
                 <div
                   style={{
-                    height: '100%',
-                    width: `${totalWidth}%`,
-                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                    borderRadius: '9999px',
-                    position: 'relative'
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                    borderRadius: '999px',
+                    overflow: 'hidden'
                   }}
+                  role="progressbar"
+                  aria-valuenow={clampedRate}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-label={`${branchName} placement rate`}
                 >
                   <div
                     style={{
+                      width: `${clampedRate}%`,
                       height: '100%',
-                      width: `${placedRatio}%`,
-                      background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
-                      borderRadius: '9999px'
+                      backgroundColor: 'var(--accent-blue, #6366f1)',
+                      borderRadius: '999px',
+                      transition: 'width 0.4s ease-out'
                     }}
                   />
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
+            No branch conversion metrics available.
+          </p>
+        )}
       </div>
 
-      <div style={{
-        marginTop: '18px',
-        paddingTop: '12px',
-        borderTop: '1px solid var(--border-color)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        fontSize: '0.72rem',
-        color: 'var(--text-muted)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-          <span>Placed Proportion</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)' }}>
-          <Award size={13} aria-hidden="true" />
-          <span>CSE leads demo metrics (86.1%)</span>
-        </div>
+      {/* Footer Meta */}
+      <div
+        style={{
+          paddingTop: '12px',
+          borderTop: '1px solid var(--border-color, #1e293b)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted, #64748b)'
+        }}
+      >
+        <span>Placement rates shown from backend analytics data</span>
+        <span>Goal: 70%</span>
       </div>
     </div>
   );
