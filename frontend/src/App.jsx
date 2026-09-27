@@ -5,6 +5,7 @@ import AtRiskStudents from './components/atRisk/AtRiskStudents';
 import SchedulerOverview from './components/scheduler/SchedulerOverview';
 import CommunicationHub from './components/communication/CommunicationHub';
 import StudentReadiness from './components/readiness/StudentReadiness';
+import StudentJobMatching from './components/matching/StudentJobMatching';
 import PlaceholderView from './components/common/PlaceholderView';
 
 export default function App() {
@@ -21,6 +22,9 @@ export default function App() {
 
       case 'readiness':
         return <StudentReadiness />;
+
+      case 'matching':
+        return <StudentJobMatching />;
 
       case 'drives':
         return <SchedulerOverview />;

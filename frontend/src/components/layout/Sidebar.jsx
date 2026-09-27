@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   GraduationCap,
   MessageSquare,
+  Briefcase,
   ShieldCheck,
   Sparkles,
   X
@@ -42,6 +43,11 @@ export default function Sidebar({
       id: 'readiness',
       label: 'Student Readiness',
       icon: GraduationCap
+    },
+    {
+      id: 'matching',
+      label: 'Job Matching',
+      icon: Briefcase
     },
     {
       id: 'communication',
@@ -98,6 +104,7 @@ export default function Sidebar({
             : {})
         }}
       >
+        {/* Header */}
         <div
           style={{
             height: '76px',
@@ -215,6 +222,7 @@ export default function Sidebar({
           )}
         </div>
 
+        {/* Navigation */}
         <nav
           aria-label="Control Panel Navigation"
           style={{
@@ -316,6 +324,7 @@ export default function Sidebar({
           })}
         </nav>
 
+        {/* Demo Environment */}
         <div
           style={{
             padding: '16px',
