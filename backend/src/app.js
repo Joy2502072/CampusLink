@@ -14,6 +14,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import schedulerRoutes from './routes/scheduler.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import readinessRoutes from './routes/readiness.routes.js';
+import skillGapRoutes from './routes/skillGap.routes.js';
 import { notFound } from './middleware/notFound.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -42,6 +43,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/drives', driveRoutes);
 app.use('/api/matching', matchingRoutes);
 app.use('/api/readiness', readinessRoutes);
+app.use('/api/skill-gap', skillGapRoutes);
 
 // Protected routes (require valid demo role credentials and role authorization)
 app.use(
