@@ -7,6 +7,7 @@ import {
   GraduationCap,
   MessageSquare,
   Briefcase,
+  Target,
   ShieldCheck,
   Sparkles,
   X
@@ -48,6 +49,11 @@ export default function Sidebar({
       id: 'matching',
       label: 'Job Matching',
       icon: Briefcase
+    },
+    {
+      id: 'skill-gap',
+      label: 'Skill Gap Analysis',
+      icon: Target
     },
     {
       id: 'communication',

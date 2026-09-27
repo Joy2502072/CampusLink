@@ -6,6 +6,7 @@ import SchedulerOverview from './components/scheduler/SchedulerOverview';
 import CommunicationHub from './components/communication/CommunicationHub';
 import StudentReadiness from './components/readiness/StudentReadiness';
 import StudentJobMatching from './components/matching/StudentJobMatching';
+import SkillGapAnalysis from './components/skillGap/SkillGapAnalysis';
 import PlaceholderView from './components/common/PlaceholderView';
 
 export default function App() {
@@ -25,6 +26,9 @@ export default function App() {
 
       case 'matching':
         return <StudentJobMatching />;
+
+      case 'skill-gap':
+        return <SkillGapAnalysis />;
 
       case 'drives':
         return <SchedulerOverview />;
