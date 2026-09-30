@@ -1,118 +1,81 @@
-import { students } from '../data/studentData.js';
+import * as studentService from '../services/student.service.js';
 import { sendResponse } from '../utils/response.js';
-
-// Deterministic helper evaluating synthetic readiness tiers
-const getReadinessStatus = (score) => {
-  if (score >= 90) return 'Excellent';
-  if (score >= 75) return 'Strong';
-  if (score >= 60) return 'Developing';
-  return 'Needs Improvement';
-};
 
 /**
  * GET /api/students
- * Retrieve all synthetic student profiles
+ * Retrieves list of all students.
  */
-export const getAllStudents = (req, res, next) => {
+export async function getAllStudents(req, res, next) {
   try {
-    return sendResponse(res, 200, true, 'Students fetched successfully', students);
+    const students = await studentService.getAllStudents();
+    return sendResponse(res, 200, true, 'Students retrieved successfully', students);
   } catch (error) {
-    next(error);
+    console.error('Error fetching students:', error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching students');
   }
-};
-
-/**
- * GET /api/students/branch/:branch
- * Filter synthetic students by engineering discipline
- */
-export const getStudentsByBranch = (req, res, next) => {
-  try {
-    const { branch } = req.params;
-
-    if (!branch || typeof branch !== 'string' || branch.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid branch parameter provided');
-    }
-
-    const normalizedBranch = branch.trim().toUpperCase();
-    const branchStudents = students.filter(
-      (s) => s.branch.toUpperCase() === normalizedBranch
-    );
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Students for branch ${normalizedBranch} fetched successfully`,
-      branchStudents
-    );
-  } catch (error) {
-    next(error);
-  }
-};
+}
 
 /**
  * GET /api/students/:id
- * Retrieve single synthetic student by identifier
+ * Retrieves a single student by ID.
  */
-export const getStudentById = (req, res, next) => {
+export async function getStudentById(req, res, next) {
   try {
     const { id } = req.params;
-
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
+    if (!id || !id.trim()) {
+      return sendResponse(res, 400, false, 'Invalid student ID parameter');
     }
 
-    const normalizedId = id.trim().toUpperCase();
-    const student = students.find((s) => s.id.toUpperCase() === normalizedId);
-
+    const student = await studentService.getStudentById(id);
     if (!student) {
-      return sendResponse(res, 404, false, 'Student not found');
+      return sendResponse(res, 404, false, `Student with ID ${id} not found`);
     }
 
-    return sendResponse(res, 200, true, 'Student fetched successfully', student);
+    return sendResponse(res, 200, true, 'Student retrieved successfully', student);
   } catch (error) {
-    next(error);
+    console.error(`Error fetching student ${req.params.id}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching student details');
   }
-};
+}
+
+/**
+ * GET /api/students/branch/:branch
+ * Retrieves students filtered by branch department.
+ */
+export async function getStudentsByBranch(req, res, next) {
+  try {
+    const { branch } = req.params;
+    if (!branch || !branch.trim()) {
+      return sendResponse(res, 400, false, 'Invalid branch parameter');
+    }
+
+    const students = await studentService.getStudentsByBranch(branch);
+    return sendResponse(res, 200, true, `Students in branch ${branch} retrieved successfully`, students);
+  } catch (error) {
+    console.error(`Error fetching students for branch ${req.params.branch}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching branch students');
+  }
+}
 
 /**
  * GET /api/students/:id/readiness
- * Retrieve deterministic readiness breakdown for single synthetic student
+ * Retrieves explainable readiness scoring for a student.
  */
-export const getStudentReadiness = (req, res, next) => {
+export async function getStudentReadiness(req, res, next) {
   try {
     const { id } = req.params;
-
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
+    if (!id || !id.trim()) {
+      return sendResponse(res, 400, false, 'Invalid student ID parameter');
     }
 
-    const normalizedId = id.trim().toUpperCase();
-    const student = students.find((s) => s.id.toUpperCase() === normalizedId);
-
-    if (!student) {
-      return sendResponse(res, 404, false, 'Student not found');
+    const readiness = await studentService.getStudentReadiness(id);
+    if (!readiness) {
+      return sendResponse(res, 404, false, `Student with ID ${id} not found`);
     }
 
-    const readinessStatus = getReadinessStatus(student.readinessScore);
-
-    const readinessData = {
-      studentId: student.id,
-      readinessScore: student.readinessScore,
-      mockInterviewScore: student.mockInterviewScore,
-      communicationScore: student.communicationScore,
-      skillGap: student.skillGap,
-      readinessStatus
-    };
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      'Student readiness fetched successfully',
-      readinessData
-    );
+    return sendResponse(res, 200, true, 'Student readiness analysis calculated successfully', readiness);
   } catch (error) {
-    next(error);
+    console.error(`Error calculating readiness for student ${req.params.id}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while calculating student readiness');
   }
-};
+}

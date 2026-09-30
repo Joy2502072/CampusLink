@@ -1,141 +1,100 @@
-import { drives } from '../data/driveData.js';
+import * as driveService from '../services/drive.service.js';
 import { sendResponse } from '../utils/response.js';
 
 /**
  * GET /api/drives
- * Retrieve all synthetic placement drives
+ * Retrieves list of all placement drives.
  */
-export const getAllDrives = (req, res, next) => {
+export async function getAllDrives(req, res, next) {
   try {
-    return sendResponse(res, 200, true, 'Drives fetched successfully', drives);
+    const drives = await driveService.getAllDrives();
+    return sendResponse(res, 200, true, 'Placement drives retrieved successfully', drives);
   } catch (error) {
-    next(error);
+    console.error('Error fetching drives:', error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching placement drives');
   }
-};
-
-/**
- * GET /api/drives/status/:status
- * Filter synthetic placement drives by status
- */
-export const getDrivesByStatus = (req, res, next) => {
-  try {
-    const { status } = req.params;
-
-    if (!status || typeof status !== 'string' || status.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid status parameter provided');
-    }
-
-    const normalizedStatus = status.trim().toUpperCase();
-    const filteredDrives = drives.filter(
-      (d) => d.status.toUpperCase() === normalizedStatus
-    );
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Drives with status '${status.trim()}' fetched successfully`,
-      filteredDrives
-    );
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/drives/branch/:branch
- * Return placement drives where the branch is included in eligibleBranches
- */
-export const getDrivesByBranch = (req, res, next) => {
-  try {
-    const { branch } = req.params;
-
-    if (!branch || typeof branch !== 'string' || branch.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid branch parameter provided');
-    }
-
-    const normalizedBranch = branch.trim().toUpperCase();
-    const eligibleDrives = drives.filter((d) =>
-      d.eligibleBranches.some((b) => b.toUpperCase() === normalizedBranch)
-    );
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Drives eligible for branch '${normalizedBranch}' fetched successfully`,
-      eligibleDrives
-    );
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/drives/:id/summary
- * Return a compact summary of the specified placement drive
- */
-export const getDriveSummary = (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid drive ID parameter provided');
-    }
-
-    const normalizedId = id.trim().toUpperCase();
-    const drive = drives.find((d) => d.id.toUpperCase() === normalizedId);
-
-    if (!drive) {
-      return sendResponse(res, 404, false, 'Placement drive not found');
-    }
-
-    const summaryData = {
-      id: drive.id,
-      company: drive.company,
-      role: drive.role,
-      date: drive.date,
-      venue: drive.venue,
-      status: drive.status,
-      openings: drive.openings,
-      applicants: drive.applicants,
-      shortlisted: drive.shortlisted,
-      packageLPA: drive.packageLPA
-    };
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      'Drive summary fetched successfully',
-      summaryData
-    );
-  } catch (error) {
-    next(error);
-  }
-};
+}
 
 /**
  * GET /api/drives/:id
- * Retrieve single synthetic placement drive by identifier
+ * Retrieves a single placement drive by ID.
  */
-export const getDriveById = (req, res, next) => {
+export async function getDriveById(req, res, next) {
   try {
     const { id } = req.params;
-
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      return sendResponse(res, 400, false, 'Invalid drive ID parameter provided');
+    if (!id || !id.trim()) {
+      return sendResponse(res, 400, false, 'Invalid drive ID parameter');
     }
 
-    const normalizedId = id.trim().toUpperCase();
-    const drive = drives.find((d) => d.id.toUpperCase() === normalizedId);
-
+    const drive = await driveService.getDriveById(id);
     if (!drive) {
-      return sendResponse(res, 404, false, 'Placement drive not found');
+      return sendResponse(res, 404, false, `Placement drive with ID ${id} not found`);
     }
 
-    return sendResponse(res, 200, true, 'Drive fetched successfully', drive);
+    return sendResponse(res, 200, true, 'Placement drive retrieved successfully', drive);
   } catch (error) {
-    next(error);
+    console.error(`Error fetching drive ${req.params.id}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching placement drive details');
   }
-};
+}
+
+/**
+ * GET /api/drives/status/:status
+ * Retrieves placement drives filtered by status.
+ */
+export async function getDrivesByStatus(req, res, next) {
+  try {
+    const { status } = req.params;
+    if (!status || !status.trim()) {
+      return sendResponse(res, 400, false, 'Invalid status parameter');
+    }
+
+    const drives = await driveService.getDrivesByStatus(status);
+    return sendResponse(res, 200, true, `Drives with status ${status} retrieved successfully`, drives);
+  } catch (error) {
+    console.error(`Error fetching drives for status ${req.params.status}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching drives by status');
+  }
+}
+
+/**
+ * GET /api/drives/branch/:branch
+ * Retrieves placement drives eligible for a specific branch.
+ */
+export async function getDrivesByBranch(req, res, next) {
+  try {
+    const { branch } = req.params;
+    if (!branch || !branch.trim()) {
+      return sendResponse(res, 400, false, 'Invalid branch parameter');
+    }
+
+    const drives = await driveService.getDrivesByBranch(branch);
+    return sendResponse(res, 200, true, `Drives eligible for branch ${branch} retrieved successfully`, drives);
+  } catch (error) {
+    console.error(`Error fetching drives for branch ${req.params.branch}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching branch eligible drives');
+  }
+}
+
+/**
+ * GET /api/drives/:id/summary
+ * Retrieves candidate eligibility metrics and summary for a drive.
+ */
+export async function getDriveSummary(req, res, next) {
+  try {
+    const { id } = req.params;
+    if (!id || !id.trim()) {
+      return sendResponse(res, 400, false, 'Invalid drive ID parameter');
+    }
+
+    const summary = await driveService.getDriveSummary(id);
+    if (!summary) {
+      return sendResponse(res, 404, false, `Placement drive with ID ${id} not found`);
+    }
+
+    return sendResponse(res, 200, true, 'Placement drive summary retrieved successfully', summary);
+  } catch (error) {
+    console.error(`Error fetching drive summary for ${req.params.id}:`, error.message);
+    return sendResponse(res, 500, false, 'An error occurred while fetching placement drive summary');
+  }
+}

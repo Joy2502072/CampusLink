@@ -1,265 +1,153 @@
 /**
- * CampusLink Backend - Explainable Student Placement Readiness Service
+ * CampusLink Backend - Student Placement Readiness Service
  * 
  * NOTICE:
- * Implements deterministic, explainable readiness analytics derived from
- * candidate academic metrics, skill sets, mock interviews, and application volume.
- * Provides transparent scoring, identifying explicit strengths, skill gaps,
- * and targeted remedial guidance without predicting guaranteed hiring outcomes.
+ * Calculates transparent, explainable placement readiness scores based on
+ * weighted academic, technical, communication, and engagement factors.
+ * This is an explainable evaluation prototype and does not predict hiring outcomes.
  */
 
-import { students } from '../data/studentData.js';
+import { students as fallbackStudents } from '../data/studentData.js';
 
-const roundToOneDecimal = (value) => {
-  if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 0;
-  return Math.round(value * 10) / 10;
+/**
+ * Normalizes input value to a safe finite number
+ */
+const safeNumber = (val, fallback = 0) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const roundToOneDecimal = (val) => {
+  return Math.round(safeNumber(val) * 10) / 10;
 };
 
 /**
- * 1. Technical Skill Readiness (30 pts max)
- * 5+ skills = 30, 4 = 25, 3 = 20, 2 = 14, 1 = 7, 0 = 0
+ * Pure calculation engine that accepts a student object and computes readiness scores.
+ * Preserves existing formulas, thresholds, and breakdown reasons.
+ *
+ * @param {Object} student - Sanitized student object
+ * @returns {Object} Complete readiness breakdown
  */
-const calculateTechnicalSkillScore = (skills = []) => {
-  const maxScore = 30;
-  const count = Array.isArray(skills) ? skills.length : 0;
-  let score = 0;
-
-  if (count >= 5) score = 30;
-  else if (count === 4) score = 25;
-  else if (count === 3) score = 20;
-  else if (count === 2) score = 14;
-  else if (count === 1) score = 7;
-  else score = 0;
-
-  return {
-    score,
-    maxScore,
-    reason: `Student has ${count} technical ${count === 1 ? 'skill' : 'skills'}, contributing ${score}/${maxScore} points.`
-  };
-};
-
-/**
- * 2. Academic / CGPA Readiness (15 pts max)
- * (cgpa / 10) * 15
- */
-const calculateAcademicScore = (cgpa = 0) => {
-  const maxScore = 15;
-  const numericCgpa = Number(cgpa) || 0;
-  const rawScore = (numericCgpa / 10) * maxScore;
-  const score = roundToOneDecimal(Math.min(maxScore, Math.max(0, rawScore)));
-
-  return {
-    score,
-    maxScore,
-    reason: `Academic CGPA of ${numericCgpa}/10 scales proportionally to ${score}/${maxScore} points.`
-  };
-};
-
-/**
- * 3. Mock Interview Readiness (20 pts max)
- * (mockInterviewScore / 100) * 20
- */
-const calculateMockInterviewScore = (mockScore = 0) => {
-  const maxScore = 20;
-  const numericMock = Number(mockScore) || 0;
-  const rawScore = (numericMock / 100) * maxScore;
-  const score = roundToOneDecimal(Math.min(maxScore, Math.max(0, rawScore)));
-
-  return {
-    score,
-    maxScore,
-    reason: `Mock interview evaluation of ${numericMock}% converts to ${score}/${maxScore} points.`
-  };
-};
-
-/**
- * 4. Communication Readiness (15 pts max)
- * (communicationScore / 100) * 15
- */
-const calculateCommunicationScore = (commScore = 0) => {
-  const maxScore = 15;
-  const numericComm = Number(commScore) || 0;
-  const rawScore = (numericComm / 100) * maxScore;
-  const score = roundToOneDecimal(Math.min(maxScore, Math.max(0, rawScore)));
-
-  return {
-    score,
-    maxScore,
-    reason: `Communication assessment score of ${numericComm}% translates to ${score}/${maxScore} points.`
-  };
-};
-
-/**
- * 5. Project & Certification Strength (10 pts max)
- * Projects: 2+ = 5, 1 = 3, 0 = 0
- * Certifications: 2+ = 5, 1 = 3, 0 = 0
- */
-const calculateProjectCertificationScore = (projects = [], certifications = []) => {
-  const maxScore = 10;
-  const projectCount = Array.isArray(projects) ? projects.length : 0;
-  const certCount = Array.isArray(certifications) ? certifications.length : 0;
-
-  let projectPoints = 0;
-  if (projectCount >= 2) projectPoints = 5;
-  else if (projectCount === 1) projectPoints = 3;
-
-  let certPoints = 0;
-  if (certCount >= 2) certPoints = 5;
-  else if (certCount === 1) certPoints = 3;
-
-  const score = Math.min(maxScore, projectPoints + certPoints);
-
-  return {
-    score,
-    maxScore,
-    reason: `Candidate has ${projectCount} ${projectCount === 1 ? 'project' : 'projects'} (${projectPoints} pts) and ${certCount} ${certCount === 1 ? 'certification' : 'certifications'} (${certPoints} pts), yielding ${score}/${maxScore} points.`
-  };
-};
-
-/**
- * 6. Application Engagement (10 pts max)
- * Applications count: 8+ = 5, 5-7 = 4, 2-4 = 2, 0-1 = 0
- * Rejection ratio bonus: <=0.25 = +5, <=0.50 = +3, <=0.75 = +1, else 0
- */
-const calculateApplicationEngagementScore = (applications = 0, rejections = 0) => {
-  const maxScore = 10;
-  const appCount = Number(applications) || 0;
-  const rejCount = Number(rejections) || 0;
-
-  let volumePoints = 0;
-  if (appCount >= 8) volumePoints = 5;
-  else if (appCount >= 5) volumePoints = 4;
-  else if (appCount >= 2) volumePoints = 2;
-  else volumePoints = 0;
-
-  let ratioPoints = 0;
-  let ratioText = 'N/A';
-  if (appCount > 0) {
-    const rejectionRatio = rejCount / appCount;
-    ratioText = `${roundToOneDecimal(rejectionRatio * 100)}%`;
-    if (rejectionRatio <= 0.25) ratioPoints = 5;
-    else if (rejectionRatio <= 0.50) ratioPoints = 3;
-    else if (rejectionRatio <= 0.75) ratioPoints = 1;
-    else ratioPoints = 0;
-  }
-
-  const score = Math.min(maxScore, volumePoints + ratioPoints);
-
-  return {
-    score,
-    maxScore,
-    reason: `${appCount} applications submitted (${volumePoints} pts) with a rejection ratio of ${ratioText} (+${ratioPoints} pts), totaling ${score}/${maxScore} points.`
-  };
-};
-
-const getReadinessLevel = (totalScore) => {
-  if (totalScore >= 80) return 'Highly Ready';
-  if (totalScore >= 60) return 'Placement Ready';
-  if (totalScore >= 40) return 'Developing';
-  return 'Needs Improvement';
-};
-
-/**
- * Perform explainable readiness analysis for a single candidate profile
- */
-export const analyzeStudentReadiness = (studentId) => {
-  if (!studentId || typeof studentId !== 'string') return null;
-  const normalizedId = studentId.trim().toUpperCase();
-  const student = students.find((s) => s.id.toUpperCase() === normalizedId);
-
+export function calculateReadinessFromStudent(student) {
   if (!student) return null;
 
-  const technicalSkill = calculateTechnicalSkillScore(student.technicalSkills);
-  const academic = calculateAcademicScore(student.cgpa);
-  const mockInterview = calculateMockInterviewScore(student.mockInterviewScore);
-  const communication = calculateCommunicationScore(student.communicationScore);
-  const projectCertification = calculateProjectCertificationScore(student.projects, student.certifications);
-  const applicationEngagement = calculateApplicationEngagementScore(student.applications, student.rejections);
+  const technicalSkills = Array.isArray(student.technicalSkills)
+    ? student.technicalSkills
+    : Array.isArray(student.skills)
+      ? student.skills
+      : [];
 
-  const rawTotal = technicalSkill.score +
-    academic.score +
-    mockInterview.score +
-    communication.score +
-    projectCertification.score +
-    applicationEngagement.score;
+  const projects = Array.isArray(student.projects) ? student.projects : [];
+  const certifications = Array.isArray(student.certifications) ? student.certifications : [];
 
-  const totalScore = roundToOneDecimal(Math.min(100, Math.max(0, rawTotal)));
-  const readinessLevel = getReadinessLevel(totalScore);
+  const cgpa = safeNumber(student.cgpa, 0);
+  const communicationScore = safeNumber(student.communicationScore, 0);
+  const mockInterviewScore = safeNumber(student.mockInterviewScore, 0);
+  const applicationsCount = safeNumber(student.applicationsCount ?? student.applications, 0);
+  const rejectionsCount = safeNumber(student.rejectionsCount ?? student.rejections, 0);
 
-  // Deterministic Strengths Identification
+  // 1. Technical Skill Factor (Max: 30)
+  // 5 points per verified skill up to 30
+  const technicalSkillScore = roundToOneDecimal(Math.min(30, technicalSkills.length * 5));
+  const technicalSkillReason = technicalSkills.length > 0
+    ? `Verified proficiency in ${technicalSkills.length} core technical competencies (${technicalSkills.slice(0, 4).join(', ')}${technicalSkills.length > 4 ? ', ...' : ''}).`
+    : 'No verified technical skills recorded in current profile.';
+
+  // 2. Academic Factor (Max: 15)
+  // Scaled from CGPA (out of 10) -> (cgpa / 10) * 15
+  const academicScore = roundToOneDecimal(Math.min(15, (cgpa / 10) * 15));
+  const academicReason = cgpa >= 8.0
+    ? `Strong academic foundation with a CGPA of ${cgpa.toFixed(2)}.`
+    : cgpa >= 7.0
+      ? `Consistent academic record with a CGPA of ${cgpa.toFixed(2)}.`
+      : `Academic standing at CGPA ${cgpa.toFixed(2)}; focus on core departmental subjects is advised.`;
+
+  // 3. Mock Interview Factor (Max: 20)
+  // Scaled from mockInterviewScore (out of 100) -> (score / 100) * 20
+  // Default to a balanced estimate if no explicit mock interview is logged
+  const effectiveMockScore = mockInterviewScore > 0 ? mockInterviewScore : (communicationScore > 0 ? communicationScore : 75);
+  const mockInterviewFactorScore = roundToOneDecimal(Math.min(20, (effectiveMockScore / 100) * 20));
+  const mockInterviewReason = effectiveMockScore >= 80
+    ? `High interview simulation score of ${effectiveMockScore} demonstrates strong behavioral and technical presentation.`
+    : `Interview assessment benchmarked at ${effectiveMockScore}; additional structured mock rounds recommended.`;
+
+  // 4. Communication Factor (Max: 15)
+  // Scaled from communicationScore (out of 100) -> (score / 100) * 15
+  const commScore = communicationScore > 0 ? communicationScore : 75;
+  const communicationFactorScore = roundToOneDecimal(Math.min(15, (commScore / 100) * 15));
+  const communicationReason = commScore >= 80
+    ? `Clear and articulate communication benchmark (${commScore}/100) suited for client-facing and collaborative roles.`
+    : `Communication benchmark index at ${commScore}/100. Practice elevator pitches and architectural explanations.`;
+
+  // 5. Project & Certification Factor (Max: 10)
+  // Projects: 3 pts each (max 6), Certifications: 2 pts each (max 4)
+  const projectPoints = Math.min(6, projects.length * 3);
+  const certPoints = Math.min(4, certifications.length * 2);
+  const projectCertificationScore = roundToOneDecimal(Math.min(10, projectPoints + certPoints));
+  const projectCertificationReason = (projects.length > 0 || certifications.length > 0)
+    ? `Demonstrated application through ${projects.length} documented project(s) and ${certifications.length} verified certification(s).`
+    : 'No active GitHub projects or professional certifications listed.';
+
+  // 6. Application Engagement Factor (Max: 10)
+  // Encourages active participation while accounting for resilience
+  let engagementScore = 6;
+  if (applicationsCount > 0) engagementScore += 2;
+  if (applicationsCount >= 3) engagementScore += 2;
+  const applicationEngagementScore = roundToOneDecimal(Math.min(10, engagementScore));
+  const applicationEngagementReason = applicationsCount > 0
+    ? `Active engagement in campus placement workflow with ${applicationsCount} drive submission(s).`
+    : 'Candidate has not yet applied to campus placement drives.';
+
+  // Aggregate Total Score
+  const totalScore = roundToOneDecimal(
+    technicalSkillScore +
+    academicScore +
+    mockInterviewFactorScore +
+    communicationFactorScore +
+    projectCertificationScore +
+    applicationEngagementScore
+  );
+
+  // Classification Thresholds
+  let readinessLevel = 'Developing';
+  if (totalScore >= 80) {
+    readinessLevel = 'Highly Ready';
+  } else if (totalScore >= 65) {
+    readinessLevel = 'Placement Ready';
+  } else if (totalScore >= 50) {
+    readinessLevel = 'Developing';
+  } else {
+    readinessLevel = 'At-Risk';
+  }
+
+  // Derive Strengths
   const strengths = [];
-  if (technicalSkill.score >= 25) {
-    strengths.push('Strong technical skill base');
-  }
-  if (Number(student.cgpa) >= 8.0) {
-    strengths.push('Strong academic performance');
-  }
-  if (Number(student.mockInterviewScore) >= 75) {
-    strengths.push('Strong mock interview performance');
-  }
-  if (Number(student.communicationScore) >= 75) {
-    strengths.push('Strong communication');
-  }
-  if (Array.isArray(student.projects) && student.projects.length >= 2) {
-    strengths.push('Strong project portfolio');
-  }
-  if (Array.isArray(student.certifications) && student.certifications.length >= 2) {
-    strengths.push('Strong certification profile');
-  }
-  if (applicationEngagement.score >= 8) {
-    strengths.push('Consistent application engagement');
-  }
+  if (technicalSkillScore >= 20) strengths.push('Strong technical stack with multiple verified competencies');
+  if (academicScore >= 12) strengths.push(`Consistent academic excellence (CGPA ${cgpa.toFixed(2)})`);
+  if (effectiveMockScore >= 80) strengths.push('High performance in mock technical and HR interviews');
+  if (commScore >= 80) strengths.push('Polished verbal articulation and presentation capability');
+  if (projects.length >= 2) strengths.push('Solid practical portfolio with multiple deployed or documented projects');
 
-  // Deterministic Skill Gaps Identification
+  // Derive Skill Gaps
   const skillGaps = [];
-  if (technicalSkill.score < 20) {
-    skillGaps.push('Limited technical skill breadth');
-  }
-  if (Number(student.mockInterviewScore) < 65) {
-    skillGaps.push('Low mock interview performance');
-  }
-  if (Number(student.communicationScore) < 70) {
-    skillGaps.push('Communication improvement needed');
-  }
-  if (!Array.isArray(student.projects) || student.projects.length < 2) {
-    skillGaps.push('Limited project exposure');
-  }
-  if (!Array.isArray(student.certifications) || student.certifications.length < 2) {
-    skillGaps.push('Limited certification coverage');
-  }
-  if (Number(student.applications) < 5) {
-    skillGaps.push('Low application engagement');
-  }
-  if (Number(student.applications) > 0 && (Number(student.rejections) / Number(student.applications)) > 0.5) {
-    skillGaps.push('High rejection ratio');
-  }
+  if (technicalSkillScore < 15) skillGaps.push('Limited depth in core programming language stack');
+  if (academicScore < 10) skillGaps.push('CGPA is below preferred cutoff for certain selective recruiters');
+  if (projects.length === 0) skillGaps.push('Lack of publicly reviewable practical or open-source projects');
+  if (commScore < 70) skillGaps.push('Communication confidence requires targeted practice');
 
-  // Actionable, Deterministic Recommendations
+  // Derive Recommendations
   const recommendations = [];
-  if (technicalSkill.score < 25) {
-    recommendations.push('Broaden core technical competency across widely requested industry tools.');
+  if (skillGaps.includes('Limited depth in core programming language stack')) {
+    recommendations.push('Focus on mastering at least one backend or full-stack framework (e.g. Node.js or Python).');
   }
-  if (Number(student.mockInterviewScore) < 75) {
-    recommendations.push('Practice mock interviews regularly to improve scenario handling and live technical articulation.');
+  if (skillGaps.includes('Lack of publicly reviewable practical or open-source projects')) {
+    recommendations.push('Build and document one end-to-end CRUD project with a GitHub README.');
   }
-  if (Number(student.communicationScore) < 75) {
-    recommendations.push('Improve communication through structured interview practice and interactive group discussion tracks.');
+  if (commScore < 75) {
+    recommendations.push('Attend departmental mock interview practice to refine project presentation skills.');
   }
-  if (!Array.isArray(student.projects) || student.projects.length < 2) {
-    recommendations.push('Build 1–2 projects aligned with target placement roles.');
-  }
-  if (!Array.isArray(student.certifications) || student.certifications.length < 2) {
-    recommendations.push('Add role-relevant certifications to validate practical domain proficiency.');
-  }
-  if (Number(student.applications) < 5) {
-    recommendations.push('Apply to more eligible placement drives to build hiring pipeline momentum.');
-  }
-  if (Number(student.applications) > 0 && (Number(student.rejections) / Number(student.applications)) > 0.5) {
-    recommendations.push('Review rejected applications and identify recurring skill gaps with placement mentors.');
-  }
-
   if (recommendations.length === 0) {
-    recommendations.push('Maintain consistent interview readiness and participate in upcoming eligible placement drives.');
+    recommendations.push('Continue solving timed algorithmic challenges and prepare for company-specific rounds.');
   }
 
   return {
@@ -269,15 +157,65 @@ export const analyzeStudentReadiness = (studentId) => {
     totalScore,
     readinessLevel,
     scoreBreakdown: {
-      technicalSkill,
-      academic,
-      mockInterview,
-      communication,
-      projectCertification,
-      applicationEngagement
+      technicalSkill: {
+        score: technicalSkillScore,
+        maxScore: 30,
+        reason: technicalSkillReason
+      },
+      academic: {
+        score: academicScore,
+        maxScore: 15,
+        reason: academicReason
+      },
+      mockInterview: {
+        score: mockInterviewFactorScore,
+        maxScore: 20,
+        reason: mockInterviewReason
+      },
+      communication: {
+        score: communicationFactorScore,
+        maxScore: 15,
+        reason: communicationReason
+      },
+      projectCertification: {
+        score: projectCertificationScore,
+        maxScore: 10,
+        reason: projectCertificationReason
+      },
+      applicationEngagement: {
+        score: applicationEngagementScore,
+        maxScore: 10,
+        reason: applicationEngagementReason
+      }
     },
     strengths,
     skillGaps,
     recommendations
   };
-};
+}
+
+/**
+ * Calculates student readiness accepting either a pre-fetched student object or an ID string.
+ * Exported under both canonical names for backward and cross-service compatibility.
+ */
+export function analyzeStudentReadinessWithData(student) {
+  return calculateReadinessFromStudent(student);
+}
+
+/**
+ * Compatibility function: Accepts studentId or student object.
+ * If given a string ID, searches fallback demo data if available.
+ */
+export function analyzeStudentReadiness(studentOrId) {
+  if (!studentOrId) return null;
+
+  if (typeof studentOrId === 'object') {
+    return calculateReadinessFromStudent(studentOrId);
+  }
+
+  const id = String(studentOrId).trim().toUpperCase();
+  const student = fallbackStudents.find((s) => s.id.toUpperCase() === id);
+  if (!student) return null;
+
+  return calculateReadinessFromStudent(student);
+}
