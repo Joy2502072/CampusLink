@@ -1,148 +1,150 @@
-import { offers } from '../data/offerData.js';
+import * as offerRepository from '../repositories/offer.repository.js';
 import { sendResponse } from '../utils/response.js';
 
 /**
+ * Extracts a numeric value from package string (e.g., "18.5 LPA" -> 18.5).
+ */
+function parsePackageValue(packageStr) {
+  if (typeof packageStr === 'number') return packageStr;
+  if (!packageStr || typeof packageStr !== 'string') return 0;
+  const match = packageStr.match(/(\d+(?:\.\d+)?)/);
+  return match ? parseFloat(match[1]) : 0;
+}
+
+/**
  * GET /api/offers
- * Retrieve all synthetic placement offers
+ * Retrieves list of all offers from MySQL.
  */
-export const getAllOffers = (req, res, next) => {
+export async function getAllOffers(req, res, next) {
   try {
-    return sendResponse(res, 200, true, 'Placement offers fetched successfully', offers);
+    const data = await offerRepository.findAllOffers();
+    return sendResponse(res, 200, true, 'Placement offers fetched successfully', data || []);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
-
-/**
- * GET /api/offers/student/:studentId
- * Return all offers belonging to a student (case-insensitive)
- */
-export const getOffersByStudent = (req, res, next) => {
-  try {
-    const { studentId } = req.params;
-
-    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
-    }
-
-    const normalizedStudentId = studentId.trim().toUpperCase();
-    const studentOffers = offers.filter(
-      (o) => o.studentId.toUpperCase() === normalizedStudentId
-    );
-
-    if (studentOffers.length === 0) {
-      return sendResponse(res, 200, true, 'No placement offers found for student', []);
-    }
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Placement offers for student ${normalizedStudentId} fetched successfully`,
-      studentOffers
-    );
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/offers/status/:status
- * Filter offers by offer status (case-insensitive)
- */
-export const getOffersByStatus = (req, res, next) => {
-  try {
-    const { status } = req.params;
-
-    if (!status || typeof status !== 'string' || !status.trim()) {
-      return sendResponse(res, 400, false, 'Invalid status parameter provided');
-    }
-
-    const normalizedStatus = status.trim().toUpperCase();
-    const filteredOffers = offers.filter(
-      (o) => o.status.toUpperCase() === normalizedStatus
-    );
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Placement offers with status '${status.trim()}' fetched successfully`,
-      filteredOffers
-    );
-  } catch (error) {
-    next(error);
-  }
-};
+}
 
 /**
  * GET /api/offers/:offerId
- * Retrieve one placement offer by ID (case-insensitive)
+ * Retrieves a single placement offer by offerId parameter.
  */
-export const getOfferById = (req, res, next) => {
+export async function getOfferById(req, res, next) {
   try {
     const { offerId } = req.params;
-
-    if (!offerId || typeof offerId !== 'string' || !offerId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid offer ID parameter provided');
+    if (!offerId || !offerId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid offer ID parameter');
     }
 
-    const normalizedOfferId = offerId.trim().toUpperCase();
-    const offer = offers.find((o) => o.id.toUpperCase() === normalizedOfferId);
-
+    const offer = await offerRepository.findOfferById(offerId.trim());
     if (!offer) {
       return sendResponse(res, 404, false, 'Placement offer not found');
     }
 
     return sendResponse(res, 200, true, 'Placement offer fetched successfully', offer);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}
+
+/**
+ * GET /api/offers/student/:studentId
+ * Retrieves placement offers for a specific student.
+ */
+export async function getOffersByStudent(req, res, next) {
+  try {
+    const { studentId } = req.params;
+    if (!studentId || !studentId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid student ID parameter');
+    }
+
+    const studentOffers = await offerRepository.findOffersByStudentId(studentId.trim());
+    return sendResponse(
+      res,
+      200,
+      true,
+      `Placement offers for student ${studentId} fetched successfully`,
+      studentOffers || []
+    );
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * GET /api/offers/status/:status
+ * Retrieves placement offers filtered by status.
+ */
+export async function getOffersByStatus(req, res, next) {
+  try {
+    const { status } = req.params;
+    if (!status || !status.trim()) {
+      return sendResponse(res, 400, false, 'Invalid status parameter');
+    }
+
+    const filtered = await offerRepository.findOffersByStatus(status.trim());
+    return sendResponse(
+      res,
+      200,
+      true,
+      `Placement offers with status ${status} fetched successfully`,
+      filtered || []
+    );
+  } catch (error) {
+    return next(error);
+  }
+}
 
 /**
  * GET /api/offers/:offerId/documents
- * Return document tracking summary with dynamic metrics calculation
+ * Retrieves document verification checklist and compliance metrics for an offer.
  */
-export const getOfferDocuments = (req, res, next) => {
+export async function getOfferDocuments(req, res, next) {
   try {
     const { offerId } = req.params;
-
-    if (!offerId || typeof offerId !== 'string' || !offerId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid offer ID parameter provided');
+    if (!offerId || !offerId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid offer ID parameter');
     }
 
-    const normalizedOfferId = offerId.trim().toUpperCase();
-    const offer = offers.find((o) => o.id.toUpperCase() === normalizedOfferId);
-
+    const offer = await offerRepository.findOfferById(offerId.trim());
     if (!offer) {
       return sendResponse(res, 404, false, 'Placement offer not found');
     }
 
-    const docs = offer.documents || [];
-    const totalDocuments = docs.length;
-    const requiredDocs = docs.filter((d) => d.required);
+    const documents = Array.isArray(offer.documents) ? offer.documents : [];
+    const totalDocuments = documents.length;
+
+    const requiredDocs = documents.filter((d) => Boolean(d.required));
     const requiredDocuments = requiredDocs.length;
 
-    const submittedDocuments = docs.filter((d) => d.status === 'Submitted').length;
-    const verifiedDocuments = docs.filter((d) => d.status === 'Verified').length;
-    const pendingDocuments = docs.filter((d) => d.status === 'Pending').length;
+    const submittedDocuments = documents.filter((d) => {
+      const s = (d.status || '').toLowerCase();
+      return s === 'submitted' || s === 'verified';
+    }).length;
 
-    // Completed required documents: either Submitted or Verified
-    const completedRequired = requiredDocs.filter(
-      (d) => d.status === 'Submitted' || d.status === 'Verified'
-    ).length;
+    const verifiedDocuments = documents.filter((d) => {
+      const s = (d.status || '').toLowerCase();
+      return s === 'verified';
+    }).length;
 
-    // Completion percentage calculation rounded to 1 decimal place
-    const rawPercentage = requiredDocuments > 0
-      ? (completedRequired / requiredDocuments) * 100
-      : 100.0;
-    const completionPercentage = Math.round(rawPercentage * 10) / 10;
+    const pendingDocuments = documents.filter((d) => {
+      const s = (d.status || '').toLowerCase();
+      return s === 'pending';
+    }).length;
 
-    const summary = {
+    const completedRequired = requiredDocs.filter((d) => {
+      const s = (d.status || '').toLowerCase();
+      return s === 'submitted' || s === 'verified';
+    }).length;
+
+    const completionPercentage =
+      requiredDocuments > 0
+        ? Math.round((completedRequired / requiredDocuments) * 1000) / 10
+        : 0;
+
+    return sendResponse(res, 200, true, 'Offer documents fetched successfully', {
       offerId: offer.id,
       studentId: offer.studentId,
-      studentName: offer.studentName,
+      studentName: offer.studentName || '',
       company: offer.company,
       totalDocuments,
       requiredDocuments,
@@ -150,83 +152,76 @@ export const getOfferDocuments = (req, res, next) => {
       verifiedDocuments,
       pendingDocuments,
       completionPercentage,
-      documents: docs
-    };
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Document tracking summary for offer ${offer.id} fetched successfully`,
-      summary
-    );
+      documents
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}
 
 /**
  * GET /api/offers/student/:studentId/summary
- * Return aggregated placement offer summary for a student
+ * Retrieves student offer and documentation compliance summary.
  */
-export const getStudentOfferSummary = (req, res, next) => {
+export async function getStudentOfferSummary(req, res, next) {
   try {
     const { studentId } = req.params;
-
-    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
+    if (!studentId || !studentId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid student ID parameter');
     }
 
-    const normalizedStudentId = studentId.trim().toUpperCase();
-    const studentOffers = offers.filter(
-      (o) => o.studentId.toUpperCase() === normalizedStudentId
-    );
+    const rawOffers = (await offerRepository.findOffersByStudentId(studentId.trim())) || [];
 
-    const totalOffers = studentOffers.length;
-    const studentName = totalOffers > 0 ? studentOffers[0].studentName : '';
+    // Sort returned offers descending by package numeric value without mutating original list
+    const sortedOffers = [...rawOffers].sort((a, b) => {
+      return parsePackageValue(b.packageLPA) - parsePackageValue(a.packageLPA);
+    });
 
-    const acceptedOffers = studentOffers.filter((o) => o.status === 'Accepted').length;
-    const joiningConfirmedOffers = studentOffers.filter((o) => o.status === 'Joining Confirmed').length;
+    const totalOffers = sortedOffers.length;
+    const studentName = sortedOffers.length > 0 ? sortedOffers[0].studentName : '';
 
-    // Active offers are Accepted or Joining Confirmed
+    const acceptedOffers = sortedOffers.filter((o) => {
+      const s = (o.status || '').toLowerCase();
+      return s === 'accepted';
+    }).length;
+
+    const joiningConfirmedOffers = sortedOffers.filter((o) => {
+      const s = (o.status || '').toLowerCase();
+      return s === 'joining confirmed' || s === 'joining-confirmed';
+    }).length;
+
     const activeOfferCount = acceptedOffers + joiningConfirmedOffers;
 
-    // Sum packageLPA for active offers only
-    const rawPackageSum = studentOffers
-      .filter((o) => o.status === 'Accepted' || o.status === 'Joining Confirmed')
-      .reduce((sum, o) => sum + (Number(o.packageLPA) || 0), 0);
-    const totalPackageValue = Math.round(rawPackageSum * 10) / 10;
+    let totalPackageValue = 0;
+    let highestNumeric = 0;
+    let highestPackageLPA = '0 LPA';
 
-    // Highest package among all student offers or 0 if none
-    const highestPackageLPA = totalOffers > 0
-      ? Math.max(...studentOffers.map((o) => Number(o.packageLPA) || 0))
-      : 0;
+    sortedOffers.forEach((offer) => {
+      const val = parsePackageValue(offer.packageLPA);
+      const s = (offer.status || '').toLowerCase();
 
-    // Sort copies of offers descending by packageLPA without mutating data source
-    const sortedOffers = [...studentOffers].sort(
-      (a, b) => (Number(b.packageLPA) || 0) - (Number(a.packageLPA) || 0)
-    );
+      if (val > highestNumeric) {
+        highestNumeric = val;
+        highestPackageLPA = offer.packageLPA;
+      }
 
-    const summary = {
-      studentId: normalizedStudentId,
+      if (s === 'accepted' || s === 'joining confirmed' || s === 'joining-confirmed') {
+        totalPackageValue += val;
+      }
+    });
+
+    return sendResponse(res, 200, true, 'Student offer summary fetched successfully', {
+      studentId: studentId.trim(),
       studentName,
       totalOffers,
       acceptedOffers,
       joiningConfirmedOffers,
       activeOfferCount,
-      totalPackageValue,
+      totalPackageValue: Math.round(totalPackageValue * 100) / 100,
       highestPackageLPA,
       offers: sortedOffers
-    };
-
-    return sendResponse(
-      res,
-      200,
-      true,
-      `Offer summary for student ${normalizedStudentId} generated successfully`,
-      summary
-    );
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}

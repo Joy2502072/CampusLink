@@ -10,7 +10,8 @@
     "db:test": "node src/db/testConnection.js",
     "db:init": "node src/db/initDb.js",
     "db:seed:students": "node src/db/seedStudents.js",
-    "db:seed:drives": "node src/db/seedDrives.js"
+    "db:seed:drives": "node src/db/seedDrives.js",
+    "db:seed:offers": "node src/db/seedOffers.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

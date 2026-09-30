@@ -1,336 +1,558 @@
-/**
- * CampusLink Backend - Placement Analytics Service
- * 
- * NOTICE:
- * All analytical aggregations are deterministic, descriptive, and derived purely
- * from in-memory synthetic datasets. They reflect current state summaries and do not
- * provide predictive or hiring-guarantee assessments.
- */
-
-import { students } from '../data/studentData.js';
-import { drives } from '../data/driveData.js';
-import { offers } from '../data/offerData.js';
+import { findAllStudents } from '../repositories/student.repository.js';
+import { findAllDrives } from '../repositories/drive.repository.js';
+import { findAllOffers } from '../repositories/offer.repository.js';
 
 /**
- * Helper to round numeric values to 1 decimal place safely
+ * Safely converts a value to a number.
  */
-const roundToOneDecimal = (value) => {
-  if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 0;
-  return Math.round(value * 10) / 10;
-};
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
 
 /**
- * Filter non-withdrawn offers (Accepted, Joining Confirmed, Offered)
+ * Extracts numeric package value.
+ * Supports values such as:
+ * 18.5
+ * "18.5 LPA"
+ * "18.5"
  */
-const getNonWithdrawnOffers = () => {
-  return offers.filter((o) => o.status !== 'Withdrawn');
-};
+function getPackageValue(offer) {
+  if (offer?.packageNumeric !== undefined && offer?.packageNumeric !== null) {
+    return toNumber(offer.packageNumeric);
+  }
+
+  if (offer?.packageLPA !== undefined && offer?.packageLPA !== null) {
+    const match = String(offer.packageLPA).match(/(\d+(?:\.\d+)?)/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  return 0;
+}
 
 /**
- * Retrieve unique student IDs considered placed (status === Accepted or Joining Confirmed)
+ * Normalizes offer status so MySQL values and legacy values
+ * can be handled consistently.
  */
-const getPlacedStudentIdSet = () => {
-  const placedOffers = offers.filter(
-    (o) => o.status === 'Accepted' || o.status === 'Joining Confirmed'
+function normalizeOfferStatus(status) {
+  const value = String(status || '').trim().toLowerCase();
+
+  if (
+    value === 'accepted' ||
+    value === 'accept'
+  ) {
+    return 'Accepted';
+  }
+
+  if (
+    value === 'joining-confirmed' ||
+    value === 'joining confirmed' ||
+    value === 'joining_confirmed'
+  ) {
+    return 'Joining Confirmed';
+  }
+
+  if (
+    value === 'rejected' ||
+    value === 'withdrawn' ||
+    value === 'declined'
+  ) {
+    return 'Rejected';
+  }
+
+  if (
+    value === 'pending' ||
+    value === 'offered' ||
+    value === 'in-review' ||
+    value === 'in review'
+  ) {
+    return 'Pending';
+  }
+
+  return status || 'Pending';
+}
+
+/**
+ * Returns true when an offer represents a placed student.
+ */
+function isPlacedOffer(offer) {
+  const status = normalizeOfferStatus(offer?.status);
+
+  return (
+    status === 'Accepted' ||
+    status === 'Joining Confirmed'
   );
-  return new Set(placedOffers.map((o) => o.studentId.toUpperCase()));
-};
+}
 
 /**
- * GET /api/analytics/overview
- * High-level institutional placement KPIs
+ * Returns true when an offer should be included
+ * in package statistics.
  */
-export const getOverviewAnalytics = () => {
+function isValidPackageOffer(offer) {
+  const status = normalizeOfferStatus(offer?.status);
+
+  return (
+    status !== 'Rejected' &&
+    getPackageValue(offer) > 0
+  );
+}
+
+/**
+ * Calculates average.
+ */
+function calculateAverage(values) {
+  if (!values.length) return 0;
+
+  const total = values.reduce(
+    (sum, value) => sum + toNumber(value),
+    0
+  );
+
+  return Number((total / values.length).toFixed(2));
+}
+
+/**
+ * Rounds a number to two decimal places.
+ */
+function roundTwo(value) {
+  return Number(toNumber(value).toFixed(2));
+}
+
+/**
+ * Gets unique placed student IDs.
+ *
+ * A student with multiple accepted offers is counted only once.
+ */
+function getPlacedStudentIds(offers) {
+  const placedIds = new Set();
+
+  for (const offer of offers) {
+    if (!isPlacedOffer(offer)) continue;
+
+    const studentId =
+      offer?.studentId ??
+      offer?.student_id;
+
+    if (studentId) {
+      placedIds.add(studentId);
+    }
+  }
+
+  return placedIds;
+}
+
+/**
+ * Checks whether a drive is active.
+ */
+function isActiveDrive(drive) {
+  const status = String(drive?.status || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    status !== 'completed' &&
+    status !== 'cancelled' &&
+    status !== 'canceled'
+  );
+}
+
+/**
+ * ============================================================
+ * OVERVIEW ANALYTICS
+ * ============================================================
+ *
+ * Response contract intentionally preserved from the original
+ * analytics service.
+ */
+export async function getOverviewAnalytics() {
+  const [students, drives, offers] = await Promise.all([
+    findAllStudents(),
+    findAllDrives(),
+    findAllOffers()
+  ]);
+
+  const placedStudentIds = getPlacedStudentIds(offers);
+
+  const packageOffers = offers.filter(isValidPackageOffer);
+  const packageValues = packageOffers.map(getPackageValue);
+
   const totalStudents = students.length;
-  const placedStudentIds = getPlacedStudentIdSet();
   const placedStudents = placedStudentIds.size;
 
-  const placementRate = totalStudents > 0
-    ? roundToOneDecimal((placedStudents / totalStudents) * 100)
-    : 0;
+  const placementRate =
+    totalStudents > 0
+      ? roundTwo((placedStudents / totalStudents) * 100)
+      : 0;
 
-  const totalOffers = offers.length;
-  const acceptedOffers = offers.filter((o) => o.status === 'Accepted').length;
-  const joiningConfirmedOffers = offers.filter((o) => o.status === 'Joining Confirmed').length;
-
-  // Active drives exclude Completed or Cancelled
-  const activePlacementDrives = drives.filter(
-    (d) => d.status !== 'Completed' && d.status !== 'Cancelled'
+  const acceptedOffers = offers.filter(
+    (offer) =>
+      normalizeOfferStatus(offer?.status) === 'Accepted'
   ).length;
 
-  const nonWithdrawn = getNonWithdrawnOffers();
-  const packageValues = nonWithdrawn.map((o) => Number(o.packageLPA) || 0);
+  const joiningConfirmedOffers = offers.filter(
+    (offer) =>
+      normalizeOfferStatus(offer?.status) === 'Joining Confirmed'
+  ).length;
 
-  let averagePackageLPA = 0;
-  let highestPackageLPA = 0;
-  let lowestPackageLPA = 0;
-
-  if (packageValues.length > 0) {
-    const totalPkgSum = packageValues.reduce((sum, p) => sum + p, 0);
-    averagePackageLPA = roundToOneDecimal(totalPkgSum / packageValues.length);
-    highestPackageLPA = roundToOneDecimal(Math.max(...packageValues));
-    lowestPackageLPA = roundToOneDecimal(Math.min(...packageValues));
-  }
+  const activePlacementDrives =
+    drives.filter(isActiveDrive).length;
 
   return {
     totalStudents,
     placedStudents,
     placementRate,
-    totalOffers,
+    totalOffers: offers.length,
     acceptedOffers,
     joiningConfirmedOffers,
     activePlacementDrives,
-    averagePackageLPA,
-    highestPackageLPA,
-    lowestPackageLPA
+    averagePackageLPA: calculateAverage(packageValues),
+    highestPackageLPA: packageValues.length
+      ? Math.max(...packageValues)
+      : 0,
+    lowestPackageLPA: packageValues.length
+      ? Math.min(...packageValues)
+      : 0
   };
-};
+}
 
 /**
- * GET /api/analytics/branches
- * Department/branch-wise placement breakdown
+ * ============================================================
+ * BRANCH ANALYTICS
+ * ============================================================
  */
-export const getBranchAnalytics = () => {
-  const placedStudentIds = getPlacedStudentIdSet();
+export async function getBranchAnalytics() {
+  const [students, offers] = await Promise.all([
+    findAllStudents(),
+    findAllOffers()
+  ]);
 
-  // Extract distinct branch names sorted alphabetically
-  const uniqueBranches = Array.from(
-    new Set(students.map((s) => (s.branch || '').toUpperCase()).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b));
+  const placedStudentIds = getPlacedStudentIds(offers);
 
-  // Map student ID to student branch for quick lookup
-  const studentBranchMap = new Map();
-  for (const s of students) {
-    if (s.id && s.branch) {
-      studentBranchMap.set(s.id.toUpperCase(), s.branch.toUpperCase());
-    }
-  }
+  const branches = [
+    ...new Set(
+      students
+        .map((student) => student?.branch)
+        .filter(Boolean)
+    )
+  ];
 
-  const nonWithdrawn = getNonWithdrawnOffers();
-
-  return uniqueBranches.map((branch) => {
+  return branches.map((branch) => {
     const branchStudents = students.filter(
-      (s) => (s.branch || '').toUpperCase() === branch
+      (student) => student.branch === branch
     );
-    const totalBranchStudents = branchStudents.length;
 
-    // Count placed students belonging to this branch (each student counted once)
-    const placedBranchStudents = branchStudents.filter((s) =>
-      placedStudentIds.has(s.id.toUpperCase())
-    ).length;
+    const branchStudentIds = new Set(
+      branchStudents.map((student) => student.id)
+    );
 
-    const placementRate = totalBranchStudents > 0
-      ? roundToOneDecimal((placedBranchStudents / totalBranchStudents) * 100)
-      : 0;
+    const placedBranchStudents =
+      [...branchStudentIds].filter((id) =>
+        placedStudentIds.has(id)
+      );
 
-    // Filter non-withdrawn offers belonging to students of this branch
-    const branchOffers = nonWithdrawn.filter((o) => {
-      const sBranch = studentBranchMap.get((o.studentId || '').toUpperCase());
-      return sBranch === branch;
+    const branchOffers = offers.filter((offer) => {
+      const studentId =
+        offer?.studentId ??
+        offer?.student_id;
+
+      return (
+        studentId &&
+        branchStudentIds.has(studentId) &&
+        isValidPackageOffer(offer)
+      );
     });
 
-    const branchPackages = branchOffers.map((o) => Number(o.packageLPA) || 0);
+    const packageValues =
+      branchOffers.map(getPackageValue);
 
-    let averagePackageLPA = 0;
-    let highestPackageLPA = 0;
+    const totalStudents = branchStudents.length;
 
-    if (branchPackages.length > 0) {
-      const sum = branchPackages.reduce((acc, p) => acc + p, 0);
-      averagePackageLPA = roundToOneDecimal(sum / branchPackages.length);
-      highestPackageLPA = roundToOneDecimal(Math.max(...branchPackages));
-    }
+    const placedStudents =
+      placedBranchStudents.length;
+
+    const placementRate =
+      totalStudents > 0
+        ? roundTwo(
+            (placedStudents / totalStudents) * 100
+          )
+        : 0;
 
     return {
       branch,
-      totalStudents: totalBranchStudents,
-      placedStudents: placedBranchStudents,
+      totalStudents,
+      placedStudents,
       placementRate,
-      averagePackageLPA,
-      highestPackageLPA
+      averagePackageLPA:
+        calculateAverage(packageValues),
+      highestPackageLPA: packageValues.length
+        ? Math.max(...packageValues)
+        : 0
     };
   });
-};
+}
 
 /**
- * GET /api/analytics/packages
- * Salary package distribution ranges and statistics
+ * ============================================================
+ * PACKAGE ANALYTICS
+ * ============================================================
  */
-export const getPackageAnalytics = () => {
-  const nonWithdrawn = getNonWithdrawnOffers();
-  const packageValues = nonWithdrawn
-    .map((o) => Number(o.packageLPA) || 0)
-    .sort((a, b) => a - b);
+export async function getPackageAnalytics() {
+  const offers = await findAllOffers();
 
-  let averagePackageLPA = 0;
-  let highestPackageLPA = 0;
-  let lowestPackageLPA = 0;
+  const packageOffers =
+    offers.filter(isValidPackageOffer);
 
-  if (packageValues.length > 0) {
-    const sum = packageValues.reduce((acc, p) => acc + p, 0);
-    averagePackageLPA = roundToOneDecimal(sum / packageValues.length);
-    highestPackageLPA = roundToOneDecimal(Math.max(...packageValues));
-    lowestPackageLPA = roundToOneDecimal(Math.min(...packageValues));
-  }
-
-  // Bracket non-withdrawn offers into predefined bands
-  const rangeBelow10 = packageValues.filter((p) => p < 10).length;
-  const range10To15 = packageValues.filter((p) => p >= 10 && p < 15).length;
-  const range15To20 = packageValues.filter((p) => p >= 15 && p < 20).length;
-  const range20Plus = packageValues.filter((p) => p >= 20).length;
+  const packageValues =
+    packageOffers.map(getPackageValue);
 
   const distribution = [
-    { range: 'Below 10 LPA', offerCount: rangeBelow10 },
-    { range: '10-15 LPA', offerCount: range10To15 },
-    { range: '15-20 LPA', offerCount: range15To20 },
-    { range: '20+ LPA', offerCount: range20Plus }
+    {
+      range: 'Below 10 LPA',
+      offerCount: packageValues.filter(
+        (value) => value < 10
+      ).length
+    },
+    {
+      range: '10-15 LPA',
+      offerCount: packageValues.filter(
+        (value) => value >= 10 && value < 15
+      ).length
+    },
+    {
+      range: '15-20 LPA',
+      offerCount: packageValues.filter(
+        (value) => value >= 15 && value < 20
+      ).length
+    },
+    {
+      range: '20+ LPA',
+      offerCount: packageValues.filter(
+        (value) => value >= 20
+      ).length
+    }
   ];
 
   return {
-    averagePackageLPA,
-    highestPackageLPA,
-    lowestPackageLPA,
+    averagePackageLPA:
+      calculateAverage(packageValues),
+
+    highestPackageLPA: packageValues.length
+      ? Math.max(...packageValues)
+      : 0,
+
+    lowestPackageLPA: packageValues.length
+      ? Math.min(...packageValues)
+      : 0,
+
     distribution,
+
     packageValues
   };
-};
+}
 
 /**
- * GET /api/analytics/companies
- * Offer distributions grouped by corporate recruiter
+ * ============================================================
+ * COMPANY ANALYTICS
+ * ============================================================
  */
-export const getCompanyAnalytics = () => {
-  const companyMap = new Map();
+export async function getCompanyAnalytics() {
+  const offers = await findAllOffers();
 
-  for (const o of offers) {
-    const compName = o.company || 'Unknown Company';
-    if (!companyMap.has(compName)) {
-      companyMap.set(compName, []);
-    }
-    companyMap.get(compName).push(o);
-  }
+  const companies = [
+    ...new Set(
+      offers
+        .map((offer) => offer?.company)
+        .filter(Boolean)
+    )
+  ];
 
-  const result = [];
+  const companyAnalytics = companies.map((company) => {
+    const companyOffers = offers.filter(
+      (offer) => offer.company === company
+    );
 
-  for (const [company, compOffers] of companyMap.entries()) {
-    const totalOffers = compOffers.length;
-    const acceptedOffers = compOffers.filter((o) => o.status === 'Accepted').length;
-    const joiningConfirmedOffers = compOffers.filter((o) => o.status === 'Joining Confirmed').length;
-    const offeredOffers = compOffers.filter((o) => o.status === 'Offered').length;
-    const withdrawnOffers = compOffers.filter((o) => o.status === 'Withdrawn').length;
+    const acceptedOffers =
+      companyOffers.filter(
+        (offer) =>
+          normalizeOfferStatus(offer.status) ===
+          'Accepted'
+      );
 
-    // Exclude Withdrawn offers from package calculations
-    const validPackages = compOffers
-      .filter((o) => o.status !== 'Withdrawn')
-      .map((o) => Number(o.packageLPA) || 0);
+    const joiningConfirmedOffers =
+      companyOffers.filter(
+        (offer) =>
+          normalizeOfferStatus(offer.status) ===
+          'Joining Confirmed'
+      );
 
-    let averagePackageLPA = 0;
-    let highestPackageLPA = 0;
+    const offeredOffers =
+      companyOffers.filter(
+        (offer) =>
+          normalizeOfferStatus(offer.status) ===
+          'Pending'
+      );
 
-    if (validPackages.length > 0) {
-      const sum = validPackages.reduce((acc, p) => acc + p, 0);
-      averagePackageLPA = roundToOneDecimal(sum / validPackages.length);
-      highestPackageLPA = roundToOneDecimal(Math.max(...validPackages));
-    }
+    const withdrawnOffers =
+      companyOffers.filter(
+        (offer) =>
+          normalizeOfferStatus(offer.status) ===
+          'Rejected'
+      );
 
-    result.push({
+    const packageValues = companyOffers
+      .filter(isValidPackageOffer)
+      .map(getPackageValue);
+
+    return {
       company,
-      totalOffers,
-      acceptedOffers,
-      joiningConfirmedOffers,
-      offeredOffers,
-      withdrawnOffers,
-      averagePackageLPA,
-      highestPackageLPA
+      totalOffers: companyOffers.length,
+      acceptedOffers: acceptedOffers.length,
+      joiningConfirmedOffers:
+        joiningConfirmedOffers.length,
+      offeredOffers: offeredOffers.length,
+      withdrawnOffers: withdrawnOffers.length,
+      averagePackageLPA:
+        calculateAverage(packageValues),
+      highestPackageLPA: packageValues.length
+        ? Math.max(...packageValues)
+        : 0
+    };
+  });
+
+  return companyAnalytics.sort((a, b) => {
+    if (
+      b.joiningConfirmedOffers !==
+      a.joiningConfirmedOffers
+    ) {
+      return (
+        b.joiningConfirmedOffers -
+        a.joiningConfirmedOffers
+      );
+    }
+
+    if (
+      b.acceptedOffers !==
+      a.acceptedOffers
+    ) {
+      return (
+        b.acceptedOffers -
+        a.acceptedOffers
+      );
+    }
+
+    return a.company.localeCompare(b.company);
+  });
+}
+
+/**
+ * ============================================================
+ * PLACEMENT INSIGHTS
+ * ============================================================
+ */
+export async function getPlacementInsights() {
+  const [
+    overview,
+    branchAnalytics,
+    companyAnalytics
+  ] = await Promise.all([
+    getOverviewAnalytics(),
+    getBranchAnalytics(),
+    getCompanyAnalytics()
+  ]);
+
+  const insights = [];
+
+  /**
+   * 1. Placement conversion
+   */
+  insights.push({
+    type: 'placement-rate',
+    title: 'Institutional placement conversion',
+    description:
+      `${overview.placedStudents} out of ` +
+      `${overview.totalStudents} students are currently placed.`,
+    value: `${overview.placementRate}%`
+  });
+
+  /**
+   * 2. Highest package
+   */
+  insights.push({
+    type: 'highest-package',
+    title: 'Maximum compensation',
+    description:
+      'Highest package recorded across active placement offers.',
+    value: `${overview.highestPackageLPA} LPA`
+  });
+
+  /**
+   * 3. Average package
+   */
+  insights.push({
+    type: 'average-package',
+    title: 'Average compensation',
+    description:
+      'Average package across non-rejected placement offers.',
+    value: `${overview.averagePackageLPA} LPA`
+  });
+
+  /**
+   * 4. Leading branch
+   */
+  if (branchAnalytics.length > 0) {
+    const leadingBranch =
+      [...branchAnalytics].sort(
+        (a, b) => b.placementRate - a.placementRate
+      )[0];
+
+    insights.push({
+      type: 'leading-branch',
+      title: 'Leading discipline by placement rate',
+      description:
+        `${leadingBranch.branch} currently has the highest ` +
+        'placement rate among available student branches.',
+      value: `${leadingBranch.placementRate}%`
     });
   }
 
-  // Sort order:
-  // 1. joiningConfirmedOffers descending
-  // 2. acceptedOffers descending
-  // 3. company name ascending (alphabetical tie-break)
-  result.sort((a, b) => {
-    if (b.joiningConfirmedOffers !== a.joiningConfirmedOffers) {
-      return b.joiningConfirmedOffers - a.joiningConfirmedOffers;
-    }
-    if (b.acceptedOffers !== a.acceptedOffers) {
-      return b.acceptedOffers - a.acceptedOffers;
-    }
-    return a.company.localeCompare(b.company);
+  /**
+   * 5. Company with most joining confirmations
+   */
+  if (companyAnalytics.length > 0) {
+    const leadingCompany =
+      [...companyAnalytics].sort(
+        (a, b) =>
+          b.joiningConfirmedOffers -
+          a.joiningConfirmedOffers
+      )[0];
+
+    insights.push({
+      type: 'joining-confirmation',
+      title: 'Highest joining confirmations',
+      description:
+        `${leadingCompany.company} has the highest ` +
+        'number of joining-confirmed offers.',
+      value:
+        String(
+          leadingCompany.joiningConfirmedOffers
+        )
+    });
+  }
+
+  /**
+   * 6. Active recruitment pipeline
+   */
+  insights.push({
+    type: 'active-drives',
+    title: 'Active recruitment pipelines',
+    description:
+      'Placement drives currently active in the system.',
+    value: String(
+      overview.activePlacementDrives
+    )
   });
 
-  return result;
-};
-
-/**
- * GET /api/analytics/insights
- * Factual descriptive summary insights
- */
-export const getPlacementInsights = () => {
-  const overview = getOverviewAnalytics();
-  const branches = getBranchAnalytics();
-  const companies = getCompanyAnalytics();
-
-  // Find branch with highest placement rate (tie-breaker: highest placedStudents, then alphabetical)
-  const sortedBranches = [...branches].sort((a, b) => {
-    if (b.placementRate !== a.placementRate) {
-      return b.placementRate - a.placementRate;
-    }
-    if (b.placedStudents !== a.placedStudents) {
-      return b.placedStudents - a.placedStudents;
-    }
-    return a.branch.localeCompare(b.branch);
-  });
-
-  const topBranch = sortedBranches[0] || { branch: 'N/A', placementRate: 0 };
-
-  // Find company with highest number of joining-confirmed offers (tie-breaker: alphabetical)
-  const sortedCompanies = [...companies].sort((a, b) => {
-    if (b.joiningConfirmedOffers !== a.joiningConfirmedOffers) {
-      return b.joiningConfirmedOffers - a.joiningConfirmedOffers;
-    }
-    return a.company.localeCompare(b.company);
-  });
-
-  const topConfirmedCompany = sortedCompanies[0] || { company: 'N/A', joiningConfirmedOffers: 0 };
-
-  const insights = [
-    {
-      type: 'conversion_rate',
-      title: 'Institutional Placement Conversion',
-      description: `${overview.placedStudents} of ${overview.totalStudents} eligible graduating candidates have secured accepted or confirmed corporate offers.`,
-      value: `${overview.placementRate}%`
-    },
-    {
-      type: 'compensation_peak',
-      title: 'Maximum Compensation Level',
-      description: 'Highest active compensation package issued across all ongoing corporate drives.',
-      value: `${overview.highestPackageLPA} LPA`
-    },
-    {
-      type: 'compensation_average',
-      title: 'Average Compensation Level',
-      description: 'Mean remuneration package across all non-withdrawn placement offers.',
-      value: `${overview.averagePackageLPA} LPA`
-    },
-    {
-      type: 'top_performing_branch',
-      title: 'Leading Discipline by Placement Rate',
-      description: `${topBranch.branch} registered the highest proportion of accepted/confirmed placements.`,
-      value: `${topBranch.branch} (${topBranch.placementRate}%)`
-    },
-    {
-      type: 'top_confirmed_employer',
-      title: 'Highest Joining Confirmations',
-      description: `${topConfirmedCompany.company} holds the largest count of finalized candidate joining commitments.`,
-      value: `${topConfirmedCompany.company} (${topConfirmedCompany.joiningConfirmedOffers} confirmed)`
-    },
-    {
-      type: 'pipeline_velocity',
-      title: 'Active Recruitment Pipelines',
-      description: 'Current placement recruitment drives open or actively executing evaluation rounds.',
-      value: `${overview.activePlacementDrives} Active Drives`
-    }
-  ];
-
-  return { insights };
-};
+  return {
+    insights
+  };
+}
