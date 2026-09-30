@@ -3,216 +3,131 @@ import {
   Users,
   Briefcase,
   TrendingUp,
-  Award,
-  RefreshCw,
+  FileCheck2,
   AlertCircle,
-  ShieldAlert,
-  Sparkles
+  RefreshCw,
+  Database
 } from 'lucide-react';
-
 import MetricCard from './MetricCard';
-import BranchConversionChart from './BranchConversionChart';
 import SalaryTrendChart from './SalaryTrendChart';
-import ActiveDrivesList from './ActiveDrivesList';
+import BranchConversionChart from './BranchConversionChart';
 import RecentActivities from './RecentActivities';
-
-import { recentActivities } from '../../data/mockPlacementData';
+import ActiveDrivesList from './ActiveDrivesList';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-export default function DashboardHome({ searchTerm = '' }) {
-  const [overviewData, setOverviewData] = useState(null);
-  const [branchData, setBranchData] = useState([]);
-  const [packageData, setPackageData] = useState([]);
-  const [drivesData, setDrivesData] = useState([]);
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Demo-User-Role': 'placement_officer'
+};
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState(null);
+function formatAveragePackageDisplay(val) {
+  if (val === null || val === undefined || val === '') return '--';
+  const str = String(val).trim();
+  if (/lpa$/i.test(str)) {
+    return str;
+  }
+  return `${str} LPA`;
+}
+
+export default function DashboardHome() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Real backend analytics and operational datasets
+  const [overview, setOverview] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [packages, setPackages] = useState(null);
+  const [drives, setDrives] = useState([]);
+  const [offers, setOffers] = useState([]);
+
+  // Per-section error tracking for resilient UI degradation
+  const [sectionErrors, setSectionErrors] = useState({
+    overview: false,
+    branches: false,
+    packages: false,
+    drives: false,
+    offers: false
+  });
 
   const fetchDashboardData = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Demo-User-Role': 'placement_officer'
+    setError(null);
+    const newSectionErrors = {
+      overview: false,
+      branches: false,
+      packages: false,
+      drives: false,
+      offers: false
     };
 
     try {
-      // ==========================================
-      // 1. OVERVIEW
-      // ==========================================
-
-      const overviewRes = await fetch(
-        `${API_BASE_URL}/analytics/overview`,
-        { headers }
-      );
-
-      if (!overviewRes.ok) {
-        throw new Error(
-          `Analytics overview request failed (HTTP ${overviewRes.status}: ${overviewRes.statusText})`
-        );
-      }
-
-      const overviewJson = await overviewRes.json();
-
-      if (
-        !overviewJson ||
-        overviewJson.success !== true ||
-        !overviewJson.data
-      ) {
-        throw new Error(
-          overviewJson?.message ||
-          'Malformed response from analytics overview service'
-        );
-      }
-
-      setOverviewData(overviewJson.data);
-
-      // ==========================================
-      // 2. SECONDARY ANALYTICS REQUESTS
-      // ==========================================
-
       const [
-        branchesResult,
-        packagesResult,
-        drivesResult
+        overviewRes,
+        branchesRes,
+        packagesRes,
+        drivesRes,
+        offersRes
       ] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/analytics/branches`, {
-          headers
-        }).then((res) => (res.ok ? res.json() : null)),
-
-        fetch(`${API_BASE_URL}/analytics/packages`, {
-          headers
-        }).then((res) => (res.ok ? res.json() : null)),
-
-        fetch(`${API_BASE_URL}/drives`).then((res) =>
-          res.ok ? res.json() : null
-        )
+        fetch(`${API_BASE_URL}/analytics/overview`, { headers: HEADERS }),
+        fetch(`${API_BASE_URL}/analytics/branches`, { headers: HEADERS }),
+        fetch(`${API_BASE_URL}/analytics/packages`, { headers: HEADERS }),
+        fetch(`${API_BASE_URL}/drives`, { headers: HEADERS }),
+        fetch(`${API_BASE_URL}/offers`, { headers: HEADERS })
       ]);
 
-      // ==========================================
-      // 3. BRANCH DATA ADAPTER
-      // ==========================================
-
-      if (
-        branchesResult.status === 'fulfilled' &&
-        branchesResult.value?.success &&
-        Array.isArray(branchesResult.value.data)
-      ) {
-        const backendBranches = branchesResult.value.data;
-
-        const normalizedBranchData = backendBranches.map((item) => ({
-          branch: item.branch,
-
-          total:
-            Number(
-              item.totalStudents ??
-              item.total ??
-              item.students ??
-              0
-            ),
-
-          placed:
-            Number(
-              item.placedStudents ??
-              item.placed ??
-              0
-            ),
-
-          rate:
-            Number(
-              item.placementRate ??
-              item.rate ??
-              0
-            )
-        }));
-
-        setBranchData(normalizedBranchData);
+      // Process Overview
+      if (overviewRes.status === 'fulfilled' && overviewRes.value.ok) {
+        const json = await overviewRes.value.json();
+        setOverview(json.data || json);
       } else {
-        setBranchData([]);
+        newSectionErrors.overview = true;
       }
 
-      // ==========================================
-      // 4. PACKAGE DATA ADAPTER
-      // ==========================================
-      //
-      // The existing SalaryTrendChart expects:
-      //
-      // [
-      //   { year, avg, highest, isProjection }
-      // ]
-      //
-      // The backend package endpoint provides package
-      // distribution/current package analytics, not the
-      // historical 2021-2026 trend.
-      //
-      // Therefore we intentionally keep the existing
-      // synthetic historical trend from mockPlacementData.
-      // ==========================================
-
-      if (
-        packagesResult.status === 'fulfilled' &&
-        packagesResult.value?.success &&
-        packagesResult.value.data
-      ) {
-        const backendPackageData = packagesResult.value.data;
-
-        /*
-         * Preserve the historical chart dataset already
-         * designed for the dashboard if the backend does
-         * not provide historical year-by-year values.
-         */
-        if (Array.isArray(backendPackageData)) {
-          const normalizedPackageData = backendPackageData
-            .filter(
-              (item) =>
-                item &&
-                item.year !== undefined &&
-                item.avg !== undefined &&
-                item.highest !== undefined
-            )
-            .map((item) => ({
-              year: String(item.year),
-              avg: Number(item.avg),
-              highest: Number(item.highest),
-              isProjection: Boolean(item.isProjection)
-            }));
-
-          if (normalizedPackageData.length > 0) {
-            setPackageData(normalizedPackageData);
-          } else {
-            setPackageData(getFallbackSalaryTrendData());
-          }
-        } else {
-          setPackageData(getFallbackSalaryTrendData());
-        }
+      // Process Branches
+      if (branchesRes.status === 'fulfilled' && branchesRes.value.ok) {
+        const json = await branchesRes.value.json();
+        setBranches(json.data || json || []);
       } else {
-        setPackageData(getFallbackSalaryTrendData());
+        newSectionErrors.branches = true;
       }
 
-      // ==========================================
-      // 5. DRIVE DATA
-      // ==========================================
-
-      if (
-        drivesResult.status === 'fulfilled' &&
-        drivesResult.value?.success &&
-        Array.isArray(drivesResult.value.data)
-      ) {
-        setDrivesData(drivesResult.value.data);
+      // Process Packages
+      if (packagesRes.status === 'fulfilled' && packagesRes.value.ok) {
+        const json = await packagesRes.value.json();
+        setPackages(json.data || json || null);
       } else {
-        setDrivesData([]);
+        newSectionErrors.packages = true;
+      }
+
+      // Process Drives
+      if (drivesRes.status === 'fulfilled' && drivesRes.value.ok) {
+        const json = await drivesRes.value.json();
+        setDrives(json.data || json || []);
+      } else {
+        newSectionErrors.drives = true;
+      }
+
+      // Process Offers
+      if (offersRes.status === 'fulfilled' && offersRes.value.ok) {
+        const json = await offersRes.value.json();
+        setOffers(json.data || json || []);
+      } else {
+        newSectionErrors.offers = true;
+      }
+
+      setSectionErrors(newSectionErrors);
+
+      // If all endpoints failed, set a general error
+      const allFailed = Object.values(newSectionErrors).every(Boolean);
+      if (allFailed) {
+        setError('Unable to connect to the backend API. Please ensure the server is running on port 5000.');
       }
     } catch (err) {
-      setErrorMessage(
-        err.message ||
-        'Failed to establish connection with backend analytics service.'
-      );
-
-      setOverviewData(null);
+      setError(err.message || 'An error occurred while fetching dashboard metrics.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -220,447 +135,251 @@ export default function DashboardHome({ searchTerm = '' }) {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // ==========================================
-  // LOADING STATE
-  // ==========================================
-
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          backgroundColor:
-            'var(--bg-card, var(--bg-sidebar, #0f172a))',
-          border:
-            '1px solid var(--border-color, #1e293b)',
-          borderRadius: '12px',
-          padding: '64px 24px',
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px'
-        }}
-      >
-        <RefreshCw
-          size={32}
-          color="var(--accent-blue, #6366f1)"
-          style={{
-            animation: 'spin 1s linear infinite'
-          }}
-        />
-
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            color:
-              'var(--text-primary, #f1f5f9)'
-          }}
-        >
-          Synchronizing analytics data from backend services...
-        </p>
-
-        <span
-          style={{
-            fontSize: '0.75rem',
-            color:
-              'var(--text-muted, #64748b)'
-          }}
-        >
-          Querying /api/analytics endpoints with placement officer credentials
-        </span>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // ERROR STATE
-  // ==========================================
-
-  if (errorMessage || !overviewData) {
-    return (
-      <div
-        style={{
-          backgroundColor:
-            'rgba(239, 68, 68, 0.08)',
-          border:
-            '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: '12px',
-          padding: '36px 24px',
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '12px'
-        }}
-      >
-        <div
-          style={{
-            width: '46px',
-            height: '46px',
-            borderRadius: '50%',
-            backgroundColor:
-              'rgba(239, 68, 68, 0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <AlertCircle
-            size={26}
-            color="var(--accent-red, #f87171)"
-          />
-        </div>
-
-        <h2
-          style={{
-            margin: 0,
-            fontSize: '1.0625rem',
-            fontWeight: 600,
-            color: '#fca5a5'
-          }}
-        >
-          Analytics Service Unavailable
-        </h2>
-
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color:
-              'var(--accent-red, #f87171)',
-            maxWidth: '480px',
-            lineHeight: 1.5
-          }}
-        >
-          {errorMessage ||
-            'Failed to retrieve overview metrics from backend.'}
-        </p>
-
-        <button
-          onClick={fetchDashboardData}
-          style={{
-            marginTop: '6px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            backgroundColor: '#dc2626',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '8px 16px',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            cursor: 'pointer'
-          }}
-        >
-          <RefreshCw size={13} />
-          Retry Connection
-        </button>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // DASHBOARD
-  // ==========================================
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
+  };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px',
-        width: '100%',
-        boxSizing: 'border-box'
-      }}
-    >
-      {/* ========================================
-          TOP BANNER
-      ======================================== */}
-
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px',
-          paddingBottom: '12px',
-          borderBottom:
-            '1px solid var(--border-color, #1e293b)'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              backgroundColor:
-                'rgba(99, 102, 241, 0.12)',
-              color:
-                'var(--accent-blue, #818cf8)',
-              border:
-                '1px solid rgba(99, 102, 241, 0.25)'
-            }}
-          >
-            <Sparkles size={12} />
-            Backend API Data
-          </span>
-
-          <span
-            style={{
-              fontSize: '0.8125rem',
-              color:
-                'var(--text-secondary, #94a3b8)'
-            }}
-          >
-            Backend prototype analytics calculated from synthetic placement data
-          </span>
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Top Header & Refresh Control */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ margin: 0, fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.02em' }}>
+              Placement Cell Intelligence
+            </h1>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                color: '#10b981',
+                border: '1px solid rgba(16, 185, 129, 0.25)'
+              }}
+            >
+              <Database size={12} />
+              Live MySQL Data
+            </span>
+          </div>
+          <p style={{ margin: '6px 0 0 0', fontSize: '0.875rem', color: 'var(--text-secondary, #94a3b8)' }}>
+            Institutional metrics and active recruitment tracking powered by real database persistence
+          </p>
         </div>
 
         <button
-          onClick={fetchDashboardData}
+          onClick={handleRefresh}
+          disabled={loading || refreshing}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            backgroundColor:
-              'var(--bg-sidebar, #0f172a)',
-            color:
-              'var(--text-secondary, #94a3b8)',
-            border:
-              '1px solid var(--border-color, #334155)',
+            gap: '8px',
+            padding: '8px 16px',
+            backgroundColor: 'var(--bg-card, #1e293b)',
+            border: '1px solid var(--border-color, #334155)',
             borderRadius: '8px',
-            padding: '6px 12px',
-            fontSize: '0.75rem',
+            color: 'var(--text-primary, #f1f5f9)',
+            fontSize: '0.875rem',
             fontWeight: 600,
-            cursor: 'pointer'
+            cursor: loading || refreshing ? 'not-allowed' : 'pointer',
+            opacity: loading || refreshing ? 0.6 : 1,
+            transition: 'background-color 0.2s ease'
           }}
         >
-          <RefreshCw size={12} />
-          <span>Sync Data</span>
+          <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          {refreshing ? 'Refreshing...' : 'Refresh Metrics'}
         </button>
       </div>
 
-      {/* ========================================
-          1. METRIC CARDS
-      ======================================== */}
+      {/* Global Error Banner */}
+      {error && (
+        <div
+          style={{
+            padding: '14px 18px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '0.875rem'
+          }}
+        >
+          <AlertCircle size={20} />
+          <span>{error}</span>
+        </div>
+      )}
 
+      {/* Metric Cards Grid */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(220px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           gap: '16px'
         }}
       >
         <MetricCard
-          title="Total Students Placed"
-          value={`${overviewData.placedStudents || 0} / ${
-            overviewData.totalStudents || 0
-          }`}
-          trend={`${
-            overviewData.placementRate || 0
-          }% overall placement rate`}
-          trendPositive={
-            Number(overviewData.placementRate) >= 60
+          title="Placement Rate"
+          value={sectionErrors.overview ? 'Unavailable' : overview ? `${overview.placementRate ?? 0}%` : '--'}
+          subtitle={
+            overview && !sectionErrors.overview
+              ? `${overview.placedStudents ?? overview.totalPlaced ?? 0} of ${overview.totalStudents ?? 0} students placed`
+              : 'Placement conversion metric'
           }
-          icon={Users}
+          icon={TrendingUp}
+          color="emerald"
+          loading={loading}
         />
 
         <MetricCard
           title="Total Offers"
-          value={overviewData.totalOffers || 0}
-          trend={`${
-            overviewData.acceptedOffers || 0
-          } accepted offers`}
-          trendPositive={true}
-          icon={Briefcase}
+          value={sectionErrors.overview ? 'Unavailable' : overview ? (overview.totalOffers ?? 0) : '--'}
+          subtitle={
+            overview && !sectionErrors.overview
+              ? `${overview.acceptedOffers ?? 0} accepted · ${overview.joiningConfirmedOffers ?? 0} confirmed`
+              : 'Cumulative offers extended'
+          }
+          icon={FileCheck2}
+          color="blue"
+          loading={loading}
         />
 
         <MetricCard
           title="Average Package"
           value={
-            overviewData.averagePackageLPA || '—'
+            sectionErrors.overview
+              ? 'Unavailable'
+              : overview
+              ? formatAveragePackageDisplay(
+                  overview.averagePackageLPA || overview.averagePackage || overview.averagePackageNumeric || overview.averageNumeric
+                )
+              : '--'
           }
-          trend={`Highest: ${
-            overviewData.highestPackageLPA || '—'
-          }`}
-          trendPositive={true}
-          icon={Award}
+          subtitle={
+            overview && !sectionErrors.overview
+              ? `Highest: ${overview.highestPackageLPA || overview.highestPackage || '0 LPA'}`
+              : 'Across all active offers'
+          }
+          icon={Users}
+          color="indigo"
+          loading={loading}
         />
 
         <MetricCard
           title="Active Drives"
           value={
-            overviewData.activePlacementDrives || 0
+            sectionErrors.overview
+              ? 'Unavailable'
+              : overview
+              ? (overview.activePlacementDrives ?? overview.activeDrives ?? drives.length)
+              : '--'
           }
-          trend={`${
-            overviewData.joiningConfirmedOffers || 0
-          } confirmations`}
-          trendPositive={true}
-          icon={TrendingUp}
+          subtitle="Recruitment drives in pipeline"
+          icon={Briefcase}
+          color="amber"
+          loading={loading}
         />
       </div>
 
-      {/* ========================================
-          2. CHARTS
-      ======================================== */}
-
+      {/* Charts Grid: Package Distribution & Branch Conversion */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
           gap: '20px'
         }}
       >
-        {/* IMPORTANT:
-            Chart components expect prop name "data"
-        */}
-        <BranchConversionChart data={branchData} />
+        {sectionErrors.packages ? (
+          <div
+            style={{
+              padding: '32px',
+              backgroundColor: 'var(--bg-card, #0f172a)',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #1e293b)',
+              textAlign: 'center',
+              color: 'var(--text-muted, #64748b)'
+            }}
+          >
+            <AlertCircle size={28} style={{ margin: '0 auto 10px', color: '#f87171' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Package Distribution Data Unavailable</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem' }}>Failed to retrieve package distribution from API.</p>
+          </div>
+        ) : (
+          <SalaryTrendChart packageData={packages} loading={loading} />
+        )}
 
-        <SalaryTrendChart data={packageData} />
+        {sectionErrors.branches ? (
+          <div
+            style={{
+              padding: '32px',
+              backgroundColor: 'var(--bg-card, #0f172a)',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #1e293b)',
+              textAlign: 'center',
+              color: 'var(--text-muted, #64748b)'
+            }}
+          >
+            <AlertCircle size={28} style={{ margin: '0 auto 10px', color: '#f87171' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Branch Conversion Data Unavailable</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem' }}>Failed to retrieve department metrics from API.</p>
+          </div>
+        ) : (
+          <BranchConversionChart data={branches} loading={loading} />
+        )}
       </div>
 
-      {/* ========================================
-          3. ACTIVE DRIVES + RECENT ACTIVITIES
-      ======================================== */}
-
+      {/* Operational Feeds: Active Drives & Recent Activities */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
           gap: '20px'
         }}
       >
-        <ActiveDrivesList
-          drives={drivesData}
-          searchTerm={searchTerm}
-        />
+        {sectionErrors.drives ? (
+          <div
+            style={{
+              padding: '32px',
+              backgroundColor: 'var(--bg-card, #0f172a)',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #1e293b)',
+              textAlign: 'center',
+              color: 'var(--text-muted, #64748b)'
+            }}
+          >
+            <AlertCircle size={28} style={{ margin: '0 auto 10px', color: '#f87171' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Active Drives Unavailable</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem' }}>Could not load placement drives list from backend.</p>
+          </div>
+        ) : (
+          <ActiveDrivesList drives={drives} loading={loading} />
+        )}
 
-        <RecentActivities
-          activities={recentActivities}
-        />
-      </div>
-
-      {/* ========================================
-          4. PROTOTYPE DISCLAIMER
-      ======================================== */}
-
-      <div
-        style={{
-          padding: '12px 16px',
-          borderRadius: '8px',
-          backgroundColor:
-            'rgba(15, 23, 42, 0.6)',
-          border:
-            '1px solid var(--border-color, #1e293b)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          textAlign: 'center'
-        }}
-      >
-        <ShieldAlert
-          size={15}
-          color="var(--text-muted, #64748b)"
-          style={{ flexShrink: 0 }}
-        />
-
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.75rem',
-            color:
-              'var(--text-muted, #64748b)',
-            lineHeight: 1.5
-          }}
-        >
-          Prototype evaluation dashboard. Statistics are
-          computed by backend placement services using
-          synthetic campus data, not live institutional data.
-        </p>
+        {sectionErrors.offers ? (
+          <div
+            style={{
+              padding: '32px',
+              backgroundColor: 'var(--bg-card, #0f172a)',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color, #1e293b)',
+              textAlign: 'center',
+              color: 'var(--text-muted, #64748b)'
+            }}
+          >
+            <AlertCircle size={28} style={{ margin: '0 auto 10px', color: '#f87171' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Recent Activity Feed Unavailable</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem' }}>Could not load placement offers from database.</p>
+          </div>
+        ) : (
+          <RecentActivities offers={offers} loading={loading} />
+        )}
       </div>
     </div>
   );
-}
-
-/*
- * Fallback historical salary dataset.
- *
- * The current backend /analytics/packages endpoint
- * provides package distribution rather than yearly
- * historical trend points.
- *
- * SalaryTrendChart requires:
- * year + avg + highest + isProjection.
- *
- * Therefore this preserves the already-existing
- * dashboard demonstration trend when the backend
- * does not provide historical yearly data.
- */
-function getFallbackSalaryTrendData() {
-  return [
-    {
-      year: '2021',
-      avg: 5.2,
-      median: 4.8,
-      highest: 24.0,
-      isProjection: false
-    },
-    {
-      year: '2022',
-      avg: 6.1,
-      median: 5.5,
-      highest: 32.0,
-      isProjection: false
-    },
-    {
-      year: '2023',
-      avg: 7.2,
-      median: 6.4,
-      highest: 38.5,
-      isProjection: false
-    },
-    {
-      year: '2024',
-      avg: 7.9,
-      median: 7.0,
-      highest: 42.0,
-      isProjection: false
-    },
-    {
-      year: '2025',
-      avg: 8.4,
-      median: 7.5,
-      highest: 44.0,
-      isProjection: false
-    },
-    {
-      year: '2026 (Proj.)',
-      avg: 9.1,
-      median: 8.0,
-      highest: 48.0,
-      isProjection: true
-    }
-  ];
 }

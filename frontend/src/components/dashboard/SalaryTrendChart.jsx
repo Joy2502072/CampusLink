@@ -1,122 +1,235 @@
 import React from 'react';
-import { TrendingUp } from 'lucide-react';
+import { BarChart2, Database } from 'lucide-react';
 
-export default function SalaryTrendChart({ data }) {
-  const width = 500;
-  const height = 190;
-  const paddingX = 42;
-  const paddingY = 24;
+function ensureLpaUnit(val) {
+  if (val === null || val === undefined || val === '') return '0 LPA';
+  const str = String(val).trim();
+  if (/lpa$/i.test(str)) {
+    return str;
+  }
+  return `${str} LPA`;
+}
 
-  const maxVal = 50; // max LPA boundary
-  const minVal = 0;
+export default function SalaryTrendChart({ packageData, loading }) {
+  if (loading) {
+    return (
+      <div
+        style={{
+          backgroundColor: 'var(--bg-card, #0f172a)',
+          border: '1px solid var(--border-color, #1e293b)',
+          borderRadius: '12px',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '320px'
+        }}
+      >
+        <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.875rem' }}>
+          Loading package distribution...
+        </span>
+      </div>
+    );
+  }
 
-  const getX = (index) => paddingX + (index * (width - 2 * paddingX)) / (data.length - 1);
-  const getY = (val) => height - paddingY - ((val - minVal) / (maxVal - minVal)) * (height - 2 * paddingY);
+  // Fallback if data is missing or empty
+  if (!packageData) {
+    return (
+      <div
+        style={{
+          backgroundColor: 'var(--bg-card, #0f172a)',
+          border: '1px solid var(--border-color, #1e293b)',
+          borderRadius: '12px',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '320px'
+        }}
+      >
+        <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.875rem' }}>
+          Package distribution data is unavailable.
+        </span>
+      </div>
+    );
+  }
 
-  const avgPoints = data.map((d, i) => `${getX(i)},${getY(d.avg)}`).join(' ');
-  const highestPoints = data.map((d, i) => `${getX(i)},${getY(d.highest)}`).join(' ');
+  // Extract distribution brackets from backend analytics response
+  const rawDistribution = Array.isArray(packageData.distribution) ? packageData.distribution : [];
 
-  const avgAreaPath = `M ${getX(0)},${getY(data[0].avg)} ` +
-    data.map((d, i) => `L ${getX(i)},${getY(d.avg)}`).join(' ') +
-    ` L ${getX(data.length - 1)},${height - paddingY} L ${getX(0)},${height - paddingY} Z`;
+  // Normalize range and count keys
+  const distribution = rawDistribution.map((item) => ({
+    range: item.range || 'Unspecified',
+    count: Number(item.offerCount ?? item.count ?? 0)
+  }));
+
+  const maxCount = Math.max(...distribution.map((d) => d.count), 1);
+  const totalOffersCount = distribution.reduce((sum, d) => sum + d.count, 0);
+
+  const highestPkg = ensureLpaUnit(
+    packageData.highestPackageLPA || packageData.highestPackage || packageData.highestPackageNumeric || packageData.highestNumeric
+  );
+  const averagePkg = ensureLpaUnit(
+    packageData.averagePackageLPA || packageData.averagePackage || packageData.averagePackageNumeric || packageData.averageNumeric
+  );
+  const lowestPkg = ensureLpaUnit(
+    packageData.lowestPackageLPA || packageData.lowestPackage || packageData.lowestPackageNumeric || packageData.lowestNumeric
+  );
 
   return (
-    <div style={{
-      backgroundColor: 'var(--bg-card)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '14px',
-      padding: '22px',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '12px' }}>
-        <div>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-            5-Year Historical Performance &amp; 2026 Projection (LPA)
-          </h3>
-          <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-            Recorded 2021-2025 CTC trends with 2026 projected estimation
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px', fontSize: '0.72rem', fontWeight: 600, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-emerald)' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-emerald)' }} />
-            Highest Offer
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-blue)' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-blue)' }} />
-            Average CTC
-          </div>
-        </div>
-      </div>
-
-      {/* Zero-Dependency SVG Visualization Canvas */}
-      <div style={{ flex: 1, width: '100%', minHeight: '160px', position: 'relative' }}>
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          aria-label="Salary package progression graphic from 2021 to 2026 projection"
-          role="img"
-          style={{ width: '100%', height: '100%', overflow: 'visible' }}
-        >
-          <defs>
-            <linearGradient id="demoAvgGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-
-          {/* Reference gridlines */}
-          {[10, 20, 30, 40].map((level) => {
-            const y = getY(level);
-            return (
-              <g key={level}>
-                <line x1={paddingX} y1={y} x2={width - paddingX} y2={y} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-                <text x={paddingX - 8} y={y + 3} fill="var(--text-muted)" fontSize="9" textAnchor="end">{level}L</text>
-              </g>
-            );
-          })}
-
-          <path d={avgAreaPath} fill="url(#demoAvgGradient)" />
-          <polyline fill="none" stroke="var(--accent-emerald)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={highestPoints} />
-          <polyline fill="none" stroke="var(--accent-blue)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={avgPoints} />
-
-          {data.map((d, i) => (
-            <g key={d.year}>
-              <circle cx={getX(i)} cy={getY(d.avg)} r="3.5" fill="#1e293b" stroke="var(--accent-blue)" strokeWidth="2" />
-              <circle cx={getX(i)} cy={getY(d.highest)} r="3.5" fill="#1e293b" stroke="var(--accent-emerald)" strokeWidth="2" />
-              <text
-                x={getX(i)}
-                y={height - 6}
-                fill={d.isProjection ? 'var(--accent-amber)' : 'var(--text-secondary)'}
-                fontSize="9"
-                fontWeight={d.isProjection ? '700' : '400'}
-                textAnchor="middle"
-              >
-                {d.year}
-              </text>
-            </g>
-          ))}
-        </svg>
-      </div>
-
-      <div style={{
-        marginTop: '14px',
-        paddingTop: '12px',
-        borderTop: '1px solid var(--border-color)',
+    <div
+      style={{
+        backgroundColor: 'var(--bg-card, #0f172a)',
+        border: '1px solid var(--border-color, #1e293b)',
+        borderRadius: '12px',
+        padding: '24px',
         display: 'flex',
-        alignItems: 'center',
+        flexDirection: 'column',
         justifyContent: 'space-between',
-        fontSize: '0.72rem',
-        color: 'var(--text-muted)',
-        flexWrap: 'wrap',
-        gap: '8px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-emerald)' }}>
-          <TrendingUp size={13} aria-hidden="true" />
-          <span>Average CTC increased from 5.2L to 8.4L (2021–2025)</span>
+        gap: '20px',
+        boxSizing: 'border-box'
+      }}
+    >
+      {/* Header */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart2 size={18} color="var(--accent-teal, #14b8a6)" />
+            <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.01em' }}>
+              Placement Package Distribution
+            </h2>
+          </div>
+
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              fontSize: '10px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              backgroundColor: 'rgba(20, 184, 166, 0.12)',
+              color: 'var(--accent-teal, #14b8a6)',
+              border: '1px solid rgba(20, 184, 166, 0.25)'
+            }}
+          >
+            <Database size={10} />
+            Live Analytics
+          </span>
         </div>
-        <span style={{ color: 'var(--text-secondary)' }}>Institutional Target: 10 LPA Avg (2027)</span>
+
+        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)' }}>
+          Current offer distribution across package ranges
+        </p>
+      </div>
+
+      {/* Package Brackets Histogram / Bars */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {distribution.length > 0 ? (
+          distribution.map((item) => {
+            const barWidthPercent = (item.count / maxCount) * 100;
+            const percentageOfTotal = totalOffersCount > 0 ? Math.round((item.count / totalOffersCount) * 100) : 0;
+
+            return (
+              <div key={item.range} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
+                  <span style={{ color: 'var(--text-primary, #f1f5f9)', fontWeight: 600 }}>
+                    {item.range}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.75rem' }}>
+                      {percentageOfTotal}%
+                    </span>
+                    <span
+                      style={{
+                        color: 'var(--accent-teal, #14b8a6)',
+                        fontWeight: 700,
+                        fontFamily: 'monospace',
+                        minWidth: '40px',
+                        textAlign: 'right'
+                      }}
+                    >
+                      {item.count} {item.count === 1 ? 'offer' : 'offers'}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                    borderRadius: '999px',
+                    overflow: 'hidden'
+                  }}
+                  role="progressbar"
+                  aria-valuenow={item.count}
+                  aria-valuemin={0}
+                  aria-valuemax={maxCount}
+                  aria-label={`${item.range} count: ${item.count}`}
+                >
+                  <div
+                    style={{
+                      width: `${barWidthPercent}%`,
+                      height: '100%',
+                      backgroundColor: 'var(--accent-teal, #14b8a6)',
+                      borderRadius: '999px',
+                      transition: 'width 0.4s ease-out'
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
+            No package distribution metrics available.
+          </p>
+        )}
+      </div>
+
+      {/* Summary Footer Badges */}
+      <div
+        style={{
+          paddingTop: '14px',
+          borderTop: '1px solid var(--border-color, #1e293b)',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '8px',
+          textAlign: 'center'
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Min CTC
+          </span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', fontFamily: 'monospace' }}>
+            {lowestPkg}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Average CTC
+          </span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent-teal, #14b8a6)', fontFamily: 'monospace' }}>
+            {averagePkg}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Max CTC
+          </span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', fontFamily: 'monospace' }}>
+            {highestPkg}
+          </span>
+        </div>
       </div>
     </div>
   );
