@@ -1,1184 +1,571 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Briefcase,
+  Building2,
   CheckCircle2,
-  AlertTriangle,
+  XCircle,
+  AlertCircle,
   RefreshCw,
-  Target,
-  Code2,
-  GraduationCap,
-  MessageSquare,
-  Activity,
-  Loader2,
-  TrendingUp
+  Award,
+  ChevronRight,
+  Sparkles,
+  Info,
+  ShieldCheck,
+  TrendingUp,
+  MessageSquare
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
-const STUDENT_ID = 'DEMO-STU-001';
+const DEFAULT_STUDENT_ID = 'DEMO-STU-001';
 
-function findValue(object, possibleKeys) {
-  if (
-    object === null ||
-    object === undefined ||
-    typeof object !== 'object'
-  ) {
-    return undefined;
-  }
-
-  for (const key of possibleKeys) {
-    if (
-      Object.prototype.hasOwnProperty.call(object, key) &&
-      object[key] !== undefined &&
-      object[key] !== null
-    ) {
-      return object[key];
-    }
-  }
-
-  for (const value of Object.values(object)) {
-    if (
-      value !== null &&
-      value !== undefined &&
-      typeof value === 'object'
-    ) {
-      const result = findValue(value, possibleKeys);
-
-      if (result !== undefined) {
-        return result;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function extractNumericScore(object, keys) {
-  const value = findValue(object, keys);
-
-  if (
-    value !== undefined &&
-    value !== null &&
-    !Number.isNaN(Number(value))
-  ) {
-    return Number(value);
-  }
-
-  return 0;
-}
-
-function findBreakdown(object) {
-  if (!object || typeof object !== 'object') {
-    return {};
-  }
-
-  const possibleKeys = [
-    'breakdown',
-    'scoreBreakdown',
-    'matchBreakdown',
-    'factors',
-    'factorBreakdown'
-  ];
-
-  for (const key of possibleKeys) {
-    if (
-      object[key] &&
-      typeof object[key] === 'object'
-    ) {
-      return object[key];
-    }
-  }
-
-  return object;
-}
-
-function getFactorScore(breakdown, factorNames) {
-  const scoreKeys = [
-    'score',
-    'points',
-    'earnedPoints',
-    'earned',
-    'value',
-    'weightedScore',
-    'contribution'
-  ];
-
-  for (const factorName of factorNames) {
-    const factor = findValue(
-      breakdown,
-      [factorName]
-    );
-
-    if (
-      factor !== undefined &&
-      factor !== null
-    ) {
-      if (
-        typeof factor === 'number' ||
-        typeof factor === 'string'
-      ) {
-        const numeric = Number(factor);
-
-        if (!Number.isNaN(numeric)) {
-          return numeric;
-        }
-      }
-
-      if (typeof factor === 'object') {
-        const numeric = extractNumericScore(
-          factor,
-          scoreKeys
-        );
-
-        if (!Number.isNaN(numeric)) {
-          return numeric;
-        }
-      }
-    }
-  }
-
-  return 0;
-}
+const AUTH_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Demo-User-Role': 'placement_officer'
+};
 
 export default function StudentJobMatching() {
+  const [studentId, setStudentId] = useState(DEFAULT_STUDENT_ID);
   const [drives, setDrives] = useState([]);
-  const [selectedDriveId, setSelectedDriveId] =
-    useState('');
-  const [matchData, setMatchData] =
-    useState(null);
+  const [selectedDriveId, setSelectedDriveId] = useState('');
+  const [matchingData, setMatchingData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [loadingDrives, setLoadingDrives] =
-    useState(true);
-  const [loadingMatch, setLoadingMatch] =
-    useState(false);
-  const [error, setError] = useState('');
-
+  // 1. Fetch drives list on mount
   useEffect(() => {
+    async function loadDrives() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/drives`, { headers: AUTH_HEADERS });
+        if (!res.ok) {
+          throw new Error(`Failed to load drives (HTTP ${res.status})`);
+        }
+        const json = await res.json();
+        const driveList = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+        setDrives(driveList);
+        if (driveList.length > 0 && !selectedDriveId) {
+          setSelectedDriveId(driveList[0].id);
+        }
+      } catch (err) {
+        setError(err.message || 'Error occurred while loading placement drives.');
+      }
+    }
     loadDrives();
-  }, []);
+  }, [selectedDriveId]);
+
+  // 2. Fetch match evaluation for selected student & drive
+  const fetchMatchEvaluation = useCallback(async () => {
+    if (!studentId || !selectedDriveId) return;
+
+    setError(null);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/matching/student/${studentId}/drive/${selectedDriveId}`,
+        { headers: AUTH_HEADERS }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to load matching evaluation (HTTP ${res.status})`);
+      }
+
+      const json = await res.json();
+      setMatchingData(json.data || json);
+    } catch (err) {
+      setError(err.message || 'Error occurred while evaluating candidate job matching.');
+      setMatchingData(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [studentId, selectedDriveId]);
 
   useEffect(() => {
     if (selectedDriveId) {
-      loadMatch(selectedDriveId);
+      setLoading(true);
+      fetchMatchEvaluation();
     }
-  }, [selectedDriveId]);
+  }, [fetchMatchEvaluation, selectedDriveId]);
 
-  async function loadDrives() {
-    try {
-      setLoadingDrives(true);
-      setError('');
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchMatchEvaluation();
+  };
 
-      const response = await fetch(
-        `${API_BASE_URL}/drives`
-      );
+  const breakdown = matchingData?.breakdown || {};
+  const branchInfo = breakdown.branchEligibility || {};
+  const techInfo = breakdown.technicalSkillMatch || {};
+  const academicInfo = breakdown.academicReadiness || {};
+  const commInfo = breakdown.communication || {};
 
-      if (!response.ok) {
-        throw new Error(
-          'Failed to load placement drives'
-        );
-      }
+  const overallScore = matchingData?.overallMatchScore ?? 0;
+  const matchLevel = matchingData?.matchLevel || 'Evaluating';
 
-      const result = await response.json();
-
-      const driveList =
-        Array.isArray(result.data)
-          ? result.data
-          : [];
-
-      setDrives(driveList);
-
-      if (driveList.length > 0) {
-        setSelectedDriveId(
-          driveList[0].id
-        );
-      }
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err.message ||
-          'Unable to load placement drives'
-      );
-    } finally {
-      setLoadingDrives(false);
-    }
-  }
-
-  async function loadMatch(driveId) {
-    try {
-      setLoadingMatch(true);
-      setError('');
-      setMatchData(null);
-
-      const response = await fetch(
-        `${API_BASE_URL}/matching/student/${STUDENT_ID}/drive/${driveId}`
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          'Failed to calculate student-job match'
-        );
-      }
-
-      const result = await response.json();
-
-      console.log(
-        '[CampusLink] Matching API response:',
-        result
-      );
-
-      setMatchData(
-        result.data || result
-      );
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err.message ||
-          'Unable to calculate match'
-      );
-    } finally {
-      setLoadingMatch(false);
-    }
-  }
-
-  const selectedDrive =
-    drives.find(
-      (drive) =>
-        drive.id === selectedDriveId
-    );
-
-  const score = extractNumericScore(
-    matchData,
-    [
-      'matchScore',
-      'overallMatchScore',
-      'overallScore',
-      'matchingScore',
-      'totalScore',
-      'score'
-    ]
-  );
-
-  const breakdown =
-    findBreakdown(matchData);
-
-  /*
-   * Backend matching weights:
-   *
-   * Branch Eligibility  = 25
-   * Technical Skills    = 35
-   * Placement Readiness = 20
-   * Mock Interview      = 10
-   * Communication       = 10
-   */
-
-  const branchScore =
-    getFactorScore(
-      breakdown,
-      [
-        'branchEligibility',
-        'branchEligibilityScore',
-        'branchScore',
-        'branch'
-      ]
-    );
-
-  const technicalScore =
-    getFactorScore(
-      breakdown,
-      [
-        'technicalSkillMatch',
-        'technicalSkillScore',
-        'technicalSkills',
-        'technicalScore',
-        'technicalSkill'
-      ]
-    );
-
-  // IMPORTANT:
-  // Backend uses "academicReadiness" for the 20-point readiness factor.
-  const readinessScore =
-    getFactorScore(
-      breakdown,
-      [
-        'academicReadiness',
-        'academicReadinessScore',
-        'placementReadiness',
-        'placementReadinessScore',
-        'readinessScore',
-        'readiness'
-      ]
-    );
-
-  const mockScore =
-    getFactorScore(
-      breakdown,
-      [
-        'mockInterview',
-        'mockInterviewScore',
-        'mockScore',
-        'interviewScore'
-      ]
-    );
-
-  const communicationScore =
-    getFactorScore(
-      breakdown,
-      [
-        'communication',
-        'communicationScore',
-        'communicationReadiness'
-      ]
-    );
-
-  const recommendation =
-    findValue(
-      matchData,
-      [
-        'recommendation',
-        'recommendationText',
-        'actionRecommendation'
-      ]
-    ) ||
-    'Continue improving the skills relevant to this placement drive.';
-
-  function getScoreColor(value) {
-    if (value >= 80) return '#10b981';
-    if (value >= 60) return '#f59e0b';
+  const getScoreColor = (score) => {
+    if (score >= 80) return '#10b981';
+    if (score >= 60) return '#3b82f6';
+    if (score >= 40) return '#f59e0b';
     return '#ef4444';
-  }
-
-  function getScoreLabel(value) {
-    if (value >= 80) {
-      return 'Strong Match';
-    }
-
-    if (value >= 60) {
-      return 'Moderate Match';
-    }
-
-    return 'Developing Match';
-  }
-
-  const scoreColor =
-    getScoreColor(score);
-
-  if (loadingDrives) {
-    return (
-      <div style={styles.centerState}>
-        <Loader2 size={30} />
-
-        <p>
-          Loading placement drives...
-        </p>
-      </div>
-    );
-  }
+  };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <div style={styles.titleRow}>
-          <div style={styles.titleIcon}>
-            <Briefcase size={22} />
-          </div>
-
-          <div>
-            <h1 style={styles.title}>
-              Student Job Matching
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ margin: 0, fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.02em' }}>
+              Student–Job Match Analysis
             </h1>
-
-            <p style={styles.subtitle}>
-              Explainable matching between
-              student readiness and placement
-              drives.
-            </p>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 10px',
+                borderRadius: '999px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                color: '#818cf8',
+                border: '1px solid rgba(99, 102, 241, 0.25)'
+              }}
+            >
+              <Briefcase size={12} />
+              Recruitment Alignment
+            </span>
           </div>
+          <p style={{ margin: '6px 0 0 0', fontSize: '0.875rem', color: 'var(--text-secondary, #94a3b8)' }}>
+            Explainable compatibility evaluation matching student profile parameters against live placement drives
+          </p>
         </div>
 
         <button
-          type="button"
-          onClick={() => {
-            if (selectedDriveId) {
-              loadMatch(selectedDriveId);
-            } else {
-              loadDrives();
-            }
+          onClick={handleRefresh}
+          disabled={loading || refreshing}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            backgroundColor: 'var(--bg-card, #1e293b)',
+            border: '1px solid var(--border-color, #334155)',
+            borderRadius: '8px',
+            color: 'var(--text-primary, #f1f5f9)',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            cursor: loading || refreshing ? 'not-allowed' : 'pointer',
+            opacity: loading || refreshing ? 0.6 : 1,
+            transition: 'background-color 0.2s ease'
           }}
-          style={styles.refreshButton}
         >
-          <RefreshCw size={16} />
-          Refresh
+          <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          {refreshing ? 'Evaluating...' : 'Refresh Match'}
         </button>
       </div>
 
-      <div style={styles.demoNotice}>
-        <AlertTriangle size={17} />
-
-        <span>
-          Demo analysis using synthetic data.
-          Match scores are explainable prototype
-          scores, not hiring guarantees.
-        </span>
-      </div>
-
       {error && (
-        <div style={styles.errorBox}>
-          <AlertTriangle size={18} />
-
-          <div>
-            <strong>
-              Matching Service Error
-            </strong>
-
-            <p>{error}</p>
-          </div>
-        </div>
-      )}
-
-      <div style={styles.studentCard}>
-        <div style={styles.studentIcon}>
-          <GraduationCap size={24} />
-        </div>
-
-        <div>
-          <span style={styles.label}>
-            STUDENT PROFILE
-          </span>
-
-          <h2 style={styles.studentName}>
-            Demo Student A
-          </h2>
-
-          <p style={styles.studentMeta}>
-            CSE • DEMO-STU-001
-          </p>
-        </div>
-
-        <div style={styles.studentStatus}>
-          <CheckCircle2 size={15} />
-          Readiness Profile Available
-        </div>
-      </div>
-
-      <div style={styles.card}>
-        <div style={styles.cardHeader}>
-          <div>
-            <h2 style={styles.cardTitle}>
-              Select Placement Drive
-            </h2>
-
-            <p style={styles.cardSubtitle}>
-              Choose a drive to calculate
-              student-job compatibility.
-            </p>
-          </div>
-        </div>
-
-        <select
-          value={selectedDriveId}
-          onChange={(event) =>
-            setSelectedDriveId(
-              event.target.value
-            )
-          }
-          style={styles.select}
-        >
-          {drives.map((drive) => (
-            <option
-              key={drive.id}
-              value={drive.id}
-            >
-              {drive.company} — {drive.role}{' '}
-              ({drive.id})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {selectedDrive && (
-        <div style={styles.driveCard}>
-          <div>
-            <span style={styles.driveLabel}>
-              SELECTED PLACEMENT DRIVE
-            </span>
-
-            <h2 style={styles.driveTitle}>
-              {selectedDrive.company}
-            </h2>
-
-            <p style={styles.driveRole}>
-              {selectedDrive.role}
-            </p>
-          </div>
-
-          <div style={styles.driveDetails}>
-            <div>
-              <span style={styles.detailLabel}>
-                DATE
-              </span>
-
-              <span>
-                {selectedDrive.date}
-              </span>
-            </div>
-
-            <div>
-              <span style={styles.detailLabel}>
-                PACKAGE
-              </span>
-
-              <span>
-                {String(
-                  selectedDrive.packageLPA
-                ).replace(/\s*LPA$/i, '')}{' '}
-                LPA
-              </span>
-            </div>
-
-            <div>
-              <span style={styles.detailLabel}>
-                OPENINGS
-              </span>
-
-              <span>
-                {selectedDrive.openings}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {loadingMatch && (
-        <div style={styles.centerState}>
-          <Loader2 size={30} />
-
-          <p>
-            Calculating explainable match...
-          </p>
-        </div>
-      )}
-
-      {!loadingMatch && matchData && (
-        <>
-          <div style={styles.scoreCard}>
-            <div>
-              <span style={styles.scoreLabel}>
-                STUDENT–JOB MATCH SCORE
-              </span>
-
-              <div style={styles.scoreRow}>
-                <span
-                  style={{
-                    ...styles.score,
-                    color: scoreColor
-                  }}
-                >
-                  {score}
-                </span>
-
-                <span
-                  style={{
-                    ...styles.scoreOutOf,
-                    color: scoreColor
-                  }}
-                >
-                  / 100
-                </span>
-              </div>
-
-              <div
-                style={{
-                  ...styles.matchBadge,
-                  backgroundColor:
-                    `${scoreColor}18`,
-                  color: scoreColor
-                }}
-              >
-                <CheckCircle2 size={15} />
-
-                {getScoreLabel(score)}
-              </div>
-            </div>
-
-            <div
-              style={{
-                ...styles.targetIcon,
-                color: scoreColor,
-                backgroundColor:
-                  `${scoreColor}18`
-              }}
-            >
-              <Target size={42} />
-            </div>
-          </div>
-
-          <div style={styles.sectionTitle}>
-            Why This Match Score?
-          </div>
-
-          <div style={styles.grid}>
-            <ScoreFactor
-              icon={
-                <GraduationCap size={20} />
-              }
-              title="Branch Eligibility"
-              value={branchScore}
-              max={25}
-            />
-
-            <ScoreFactor
-              icon={
-                <Code2 size={20} />
-              }
-              title="Technical Skills"
-              value={technicalScore}
-              max={35}
-            />
-
-            <ScoreFactor
-              icon={
-                <Target size={20} />
-              }
-              title="Placement Readiness"
-              value={readinessScore}
-              max={20}
-            />
-
-            <ScoreFactor
-              icon={
-                <Activity size={20} />
-              }
-              title="Mock Interview"
-              value={mockScore}
-              max={10}
-            />
-
-            <ScoreFactor
-              icon={
-                <MessageSquare size={20} />
-              }
-              title="Communication"
-              value={communicationScore}
-              max={10}
-            />
-          </div>
-
-          <div style={styles.bottomGrid}>
-            <div style={styles.infoCard}>
-              <div style={styles.infoHeader}>
-                <TrendingUp size={18} />
-
-                <h3
-                  style={
-                    styles.infoHeaderTitle
-                  }
-                >
-                  Recommendation
-                </h3>
-              </div>
-
-              <p style={styles.infoText}>
-                {recommendation}
-              </p>
-            </div>
-
-            <div style={styles.infoCard}>
-              <div style={styles.infoHeader}>
-                <Target size={18} />
-
-                <h3
-                  style={
-                    styles.infoHeaderTitle
-                  }
-                >
-                  Match Interpretation
-                </h3>
-              </div>
-
-              <p style={styles.infoText}>
-                {score >= 80
-                  ? 'The student demonstrates strong alignment with this placement drive.'
-                  : score >= 60
-                    ? 'The student has reasonable alignment, with some areas available for improvement.'
-                    : 'The student has several improvement areas before becoming strongly aligned with this drive.'}
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.footerNotice}>
-            <AlertTriangle size={15} />
-
-            <span>
-              This score explains compatibility
-              using the current demo profile. It
-              does not predict or guarantee
-              selection.
-            </span>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function ScoreFactor({
-  icon,
-  title,
-  value,
-  max
-}) {
-  const numericValue =
-    Number(value || 0);
-
-  const percentage =
-    max > 0
-      ? Math.min(
-          100,
-          (numericValue / max) * 100
-        )
-      : 0;
-
-  return (
-    <div style={styles.factorCard}>
-      <div style={styles.factorTop}>
-        <div style={styles.factorIcon}>
-          {icon}
-        </div>
-
-        <div>
-          <h3 style={styles.factorTitle}>
-            {title}
-          </h3>
-
-          <p style={styles.factorScore}>
-            {numericValue} / {max}
-          </p>
-        </div>
-      </div>
-
-      <div style={styles.progressTrack}>
         <div
           style={{
-            ...styles.progressBar,
-            width: `${percentage}%`
+            padding: '12px 16px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.875rem'
           }}
-        />
+        >
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Selector Toolbar */}
+      <div
+        style={{
+          backgroundColor: 'var(--bg-card, #0f172a)',
+          border: '1px solid var(--border-color, #1e293b)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.6875rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px', fontWeight: 600 }}>
+              Candidate ID
+            </label>
+            <input
+              type="text"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value.trim())}
+              placeholder="e.g. DEMO-STU-001"
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '0.8125rem',
+                fontFamily: 'monospace',
+                outline: 'none',
+                width: '140px'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.6875rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px', fontWeight: 600 }}>
+              Target Recruitment Drive
+            </label>
+            <select
+              value={selectedDriveId}
+              onChange={(e) => setSelectedDriveId(e.target.value)}
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8125rem',
+                outline: 'none',
+                minWidth: '260px'
+              }}
+            >
+              {drives.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.company} — {d.role} ({d.id})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {matchingData && (
+          <div style={{ fontSize: '0.8125rem', color: '#cbd5e1' }}>
+            Authoritative Candidate: <strong style={{ color: '#ffffff' }}>{matchingData.studentName}</strong>
+          </div>
+        )}
       </div>
+
+      {loading ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
+          <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ margin: 0, fontSize: '0.875rem' }}>Evaluating candidate profile against recruiter parameters...</p>
+        </div>
+      ) : matchingData ? (
+        <>
+          {/* Main Hero Card */}
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card, #0f172a)',
+              border: '1px solid var(--border-color, #1e293b)',
+              borderRadius: '14px',
+              padding: '24px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '24px',
+              alignItems: 'center'
+            }}
+          >
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Overall Match Compatibility
+              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '6px' }}>
+                <span style={{ fontSize: '3rem', fontWeight: 800, color: getScoreColor(overallScore), fontFamily: 'monospace' }}>
+                  {overallScore}%
+                </span>
+                <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Match Index</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '3px 10px',
+                    borderRadius: '999px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: `${getScoreColor(overallScore)}22`,
+                    color: getScoreColor(overallScore),
+                    border: `1px solid ${getScoreColor(overallScore)}44`
+                  }}
+                >
+                  {matchLevel}
+                </span>
+                <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
+                  Drive: <strong style={{ color: '#cbd5e1' }}>{matchingData.company}</strong> ({matchingData.role})
+                </span>
+              </div>
+            </div>
+
+            {/* Recommendation Prompt */}
+            <div
+              style={{
+                backgroundColor: 'rgba(30, 41, 59, 0.5)',
+                border: '1px solid #334155',
+                borderRadius: '10px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#818cf8' }}>
+                <Sparkles size={14} /> Deterministic Recommendation
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                {matchingData.recommendation}
+              </p>
+            </div>
+          </div>
+
+          {/* 4 Supported Scoring Dimensions */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '16px'
+            }}
+          >
+            {/* 1. Branch Eligibility (25 pts) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '10px',
+                padding: '18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#f8fafc' }}>
+                  Branch Eligibility
+                </span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontFamily: 'monospace', color: branchInfo.matched ? '#10b981' : '#ef4444' }}>
+                  {branchInfo.score} / {branchInfo.maxScore} pts
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: branchInfo.matched ? '#34d399' : '#f87171' }}>
+                {branchInfo.matched ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                <span>{branchInfo.matched ? 'Criteria Fulfilled' : 'Disqualified by Branch'}</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                {branchInfo.reason}
+              </p>
+            </div>
+
+            {/* 2. Technical Skill Match (35 pts) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '10px',
+                padding: '18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#f8fafc' }}>
+                  Technical Skills
+                </span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontFamily: 'monospace', color: techInfo.status === 'AVAILABLE' ? '#818cf8' : '#f59e0b' }}>
+                  {techInfo.status === 'AVAILABLE' ? `${techInfo.score} / ${techInfo.maxScore} pts` : 'Requirements Pending'}
+                </span>
+              </div>
+
+              {techInfo.status === 'AVAILABLE' ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+                    <Award size={14} color="#818cf8" />
+                    <span>Matched: {techInfo.matchedSkills?.length || 0} | Missing: {techInfo.missingSkills?.length || 0}</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                    {techInfo.reason}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#fbbf24' }}>
+                    <Info size={14} />
+                    <span>Requirements Unavailable</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                    Drive record does not currently list technical prerequisites. Technical compatibility will activate once populated.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* 3. Placement Readiness (25 pts) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '10px',
+                padding: '18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#f8fafc' }}>
+                  Placement Readiness
+                </span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontFamily: 'monospace', color: '#10b981' }}>
+                  {academicInfo.score} / {academicInfo.maxScore} pts
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+                <TrendingUp size={14} color="#10b981" />
+                <span>Readiness Score: {academicInfo.readinessScore || 0}/100</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                {academicInfo.reason}
+              </p>
+            </div>
+
+            {/* 4. Communication Benchmark (15 pts) */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '10px',
+                padding: '18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#f8fafc' }}>
+                  Communication
+                </span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontFamily: 'monospace', color: '#60a5fa' }}>
+                  {commInfo.score} / {commInfo.maxScore} pts
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+                <MessageSquare size={14} color="#60a5fa" />
+                <span>Communication Score: {commInfo.rawScore || 0}/100</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }}>
+                {commInfo.reason}
+              </p>
+            </div>
+          </div>
+
+          {/* Strengths & Improvement Observations */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+              gap: '20px'
+            }}
+          >
+            {/* Strengths */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '12px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 700, color: '#34d399' }}>
+                <CheckCircle2 size={16} /> Observed Alignment Strengths
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {matchingData.strengths?.map((str, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      fontSize: '0.8125rem',
+                      color: '#cbd5e1'
+                    }}
+                  >
+                    • {str}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Improvement Areas */}
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #0f172a)',
+                border: '1px solid var(--border-color, #1e293b)',
+                borderRadius: '12px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 700, color: '#fbbf24' }}>
+                <AlertCircle size={16} /> Improvement & Preparation Areas
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {matchingData.improvementAreas?.map((area, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      fontSize: '0.8125rem',
+                      color: '#cbd5e1'
+                    }}
+                  >
+                    • {area}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Operational Methodology Note & Disclaimer */}
+          <div
+            style={{
+              padding: '14px 18px',
+              backgroundColor: 'rgba(30, 41, 59, 0.4)',
+              borderRadius: '8px',
+              border: '1px solid rgba(51, 65, 85, 0.4)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              fontSize: '0.75rem',
+              color: '#94a3b8'
+            }}
+          >
+            <ShieldCheck size={16} color="#818cf8" style={{ marginTop: '2px', flexShrink: 0 }} />
+            <div>
+              <strong style={{ color: '#cbd5e1' }}>Explainable Match Model:</strong> Explainable prototype match analysis using live student and placement data. When recruitment technical prerequisites are unavailable, baseline evaluation scores reflect branch eligibility, institutional readiness, and communication competence. This deterministic model supports placement counseling and does not predict or guarantee company hiring outcomes.
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
-
-const styles = {
-  page: {
-    padding: '28px',
-    maxWidth: '1400px',
-    margin: '0 auto',
-    color: '#e2e8f0'
-  },
-
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '20px',
-    marginBottom: '20px'
-  },
-
-  titleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px'
-  },
-
-  titleIcon: {
-    width: '46px',
-    height: '46px',
-    borderRadius: '12px',
-    backgroundColor:
-      'rgba(99, 102, 241, 0.15)',
-    color: '#818cf8',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  title: {
-    margin: 0,
-    fontSize: '24px',
-    fontWeight: 750,
-    color: '#f8fafc'
-  },
-
-  subtitle: {
-    margin: '5px 0 0',
-    color: '#94a3b8',
-    fontSize: '13px'
-  },
-
-  refreshButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '9px 14px',
-    borderRadius: '8px',
-    border: '1px solid #334155',
-    backgroundColor: '#111827',
-    color: '#cbd5e1',
-    cursor: 'pointer',
-    fontWeight: 600
-  },
-
-  demoNotice: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '10px',
-    padding: '12px 14px',
-    marginBottom: '18px',
-    borderRadius: '10px',
-    border:
-      '1px solid rgba(245, 158, 11, 0.25)',
-    backgroundColor:
-      'rgba(245, 158, 11, 0.08)',
-    color: '#fbbf24',
-    fontSize: '12px',
-    lineHeight: 1.5
-  },
-
-  errorBox: {
-    display: 'flex',
-    gap: '12px',
-    padding: '15px',
-    marginBottom: '18px',
-    borderRadius: '10px',
-    backgroundColor:
-      'rgba(239, 68, 68, 0.08)',
-    border:
-      '1px solid rgba(239, 68, 68, 0.25)',
-    color: '#fca5a5'
-  },
-
-  studentCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
-    padding: '18px',
-    marginBottom: '18px',
-    borderRadius: '14px',
-    border: '1px solid #1e293b',
-    backgroundColor: '#111827'
-  },
-
-  studentIcon: {
-    width: '44px',
-    height: '44px',
-    borderRadius: '10px',
-    backgroundColor:
-      'rgba(16, 185, 129, 0.12)',
-    color: '#34d399',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  label: {
-    display: 'block',
-    fontSize: '10px',
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-    color: '#64748b'
-  },
-
-  studentName: {
-    margin: '3px 0 1px',
-    fontSize: '16px',
-    color: '#f8fafc'
-  },
-
-  studentMeta: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#94a3b8'
-  },
-
-  studentStatus: {
-    marginLeft: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '7px 10px',
-    borderRadius: '7px',
-    backgroundColor:
-      'rgba(16, 185, 129, 0.1)',
-    color: '#34d399',
-    fontSize: '11px',
-    fontWeight: 600
-  },
-
-  card: {
-    padding: '20px',
-    borderRadius: '14px',
-    border: '1px solid #1e293b',
-    backgroundColor: '#111827',
-    marginBottom: '18px'
-  },
-
-  cardHeader: {
-    marginBottom: '12px'
-  },
-
-  cardTitle: {
-    margin: 0,
-    fontSize: '15px',
-    color: '#f8fafc'
-  },
-
-  cardSubtitle: {
-    margin: '4px 0 0',
-    fontSize: '12px',
-    color: '#64748b'
-  },
-
-  select: {
-    width: '100%',
-    padding: '12px 14px',
-    borderRadius: '9px',
-    border: '1px solid #334155',
-    backgroundColor: '#0f172a',
-    color: '#e2e8f0',
-    fontSize: '13px',
-    outline: 'none'
-  },
-
-  driveCard: {
-    padding: '20px',
-    borderRadius: '14px',
-    background:
-      'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(15, 23, 42, 0.7))',
-    border:
-      '1px solid rgba(99, 102, 241, 0.25)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '20px',
-    marginBottom: '18px'
-  },
-
-  driveLabel: {
-    fontSize: '10px',
-    fontWeight: 700,
-    color: '#818cf8',
-    letterSpacing: '0.08em'
-  },
-
-  driveTitle: {
-    margin: '6px 0 2px',
-    fontSize: '20px',
-    color: '#f8fafc'
-  },
-
-  driveRole: {
-    margin: 0,
-    color: '#94a3b8',
-    fontSize: '13px'
-  },
-
-  driveDetails: {
-    display: 'flex',
-    gap: '24px'
-  },
-
-  detailLabel: {
-    display: 'block',
-    marginBottom: '4px',
-    fontSize: '9px',
-    fontWeight: 700,
-    color: '#64748b',
-    letterSpacing: '0.08em'
-  },
-
-  scoreCard: {
-    padding: '24px',
-    borderRadius: '14px',
-    border: '1px solid #1e293b',
-    backgroundColor: '#111827',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px'
-  },
-
-  scoreLabel: {
-    fontSize: '10px',
-    fontWeight: 700,
-    color: '#64748b',
-    letterSpacing: '0.08em'
-  },
-
-  scoreRow: {
-    display: 'flex',
-    alignItems: 'baseline',
-    marginTop: '3px'
-  },
-
-  score: {
-    fontSize: '52px',
-    fontWeight: 800,
-    lineHeight: 1
-  },
-
-  scoreOutOf: {
-    fontSize: '18px',
-    fontWeight: 600,
-    marginLeft: '5px'
-  },
-
-  matchBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '6px 10px',
-    borderRadius: '7px',
-    fontSize: '12px',
-    fontWeight: 700,
-    marginTop: '10px'
-  },
-
-  targetIcon: {
-    width: '82px',
-    height: '82px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  sectionTitle: {
-    fontSize: '16px',
-    fontWeight: 700,
-    color: '#f8fafc',
-    marginBottom: '12px'
-  },
-
-  grid: {
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(5, minmax(0, 1fr))',
-    gap: '12px',
-    marginBottom: '18px'
-  },
-
-  factorCard: {
-    padding: '16px',
-    borderRadius: '12px',
-    border: '1px solid #1e293b',
-    backgroundColor: '#111827'
-  },
-
-  factorTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginBottom: '14px'
-  },
-
-  factorIcon: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '9px',
-    backgroundColor:
-      'rgba(99, 102, 241, 0.12)',
-    color: '#818cf8',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-
-  factorTitle: {
-    margin: 0,
-    fontSize: '11px',
-    color: '#94a3b8',
-    fontWeight: 600
-  },
-
-  factorScore: {
-    margin: '3px 0 0',
-    fontSize: '14px',
-    color: '#f8fafc',
-    fontWeight: 700
-  },
-
-  progressTrack: {
-    height: '5px',
-    borderRadius: '5px',
-    backgroundColor: '#1e293b',
-    overflow: 'hidden'
-  },
-
-  progressBar: {
-    height: '100%',
-    borderRadius: '5px',
-    backgroundColor: '#6366f1',
-    transition: 'width 0.3s ease'
-  },
-
-  bottomGrid: {
-    display: 'grid',
-    gridTemplateColumns:
-      '1fr 1fr',
-    gap: '14px'
-  },
-
-  infoCard: {
-    padding: '18px',
-    borderRadius: '12px',
-    border: '1px solid #1e293b',
-    backgroundColor: '#111827'
-  },
-
-  infoHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#818cf8',
-    marginBottom: '9px'
-  },
-
-  infoHeaderTitle: {
-    margin: 0,
-    fontSize: '14px'
-  },
-
-  infoText: {
-    margin: 0,
-    color: '#94a3b8',
-    fontSize: '12px',
-    lineHeight: 1.6
-  },
-
-  footerNotice: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginTop: '16px',
-    padding: '11px 13px',
-    borderRadius: '9px',
-    backgroundColor:
-      'rgba(99, 102, 241, 0.06)',
-    border:
-      '1px solid rgba(99, 102, 241, 0.12)',
-    color: '#64748b',
-    fontSize: '11px'
-  },
-
-  centerState: {
-    minHeight: '300px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    color: '#94a3b8'
-  }
-};

@@ -1,204 +1,182 @@
-/**
- * CampusLink Backend - Deterministic Prototype Matching Engine
- * 
- * NOTICE:
- * This is a deterministic rule-based demo matching service designed for prototype
- * evaluation. It evaluates candidate readiness indicators and text-based keyword
- * overlaps. It does not provide hiring predictions or guarantee selection outcomes.
- */
-
-// Common stopwords to exclude during basic tokenization
-const STOP_WORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he',
-  'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 'to', 'was', 'were',
-  'will', 'with', 'round', 'role', 'entry', 'level', 'hiring', 'campus', 'drive',
-  'building', 'targeting', 'evaluation', 'focusing', 'session', 'covering'
-]);
+import * as studentRepository from '../repositories/student.repository.js';
+import * as driveRepository from '../repositories/drive.repository.js';
+import * as readinessService from './readiness.service.js';
 
 /**
- * Clean and normalize text by stripping punctuation and lowercasing
+ * Normalizes an array of skills or comma-separated string into clean unique strings.
  */
-const normalizeText = (text) => {
-  if (!text || typeof text !== 'string') return '';
-  return text.toLowerCase().replace(/[^a-z0-9\s.+/#-]/g, ' ');
-};
+function normalizeSkillList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return Array.from(new Set(raw.map((s) => String(s).trim()).filter(Boolean)));
+  }
+  if (typeof raw === 'string') {
+    return Array.from(new Set(raw.split(',').map((s) => s.trim()).filter(Boolean)));
+  }
+  return [];
+}
 
 /**
- * Extract distinct words and normalized phrases from text
+ * Evaluates candidate matching against a recruitment drive using authoritative MySQL records.
+ * Supported 100-point breakdown:
+ * - Branch Eligibility: 25 pts
+ * - Technical Skills: 35 pts (marked unavailable when drive requiredSkills is empty)
+ * - Academic & Placement Readiness: 25 pts
+ * - Communication Benchmark: 15 pts
+ *
+ * @param {string} studentId
+ * @param {string} driveId
+ * @returns {Promise<Object>}
  */
-const extractSearchTokens = (text) => {
-  const normalized = normalizeText(text);
-  const rawWords = normalized.split(/\s+/).filter(Boolean);
-  return rawWords.filter((w) => !STOP_WORDS.has(w));
-};
-
-/**
- * Deterministically calculate skill overlap points (up to 35)
- * Formula: (matched unique student skills / total unique student skills) * 35
- */
-const evaluateTechnicalSkillMatch = (studentSkills = [], role = '', description = '') => {
-  const maxScore = 35;
-
-  // Deduplicate and filter student skills case-insensitively while preserving original labels
-  const uniqueSkillMap = new Map();
-  for (const skill of studentSkills) {
-    if (!skill || typeof skill !== 'string') continue;
-    const trimmed = skill.trim();
-    if (!trimmed) continue;
-    const lowerKey = trimmed.toLowerCase();
-    if (!uniqueSkillMap.has(lowerKey)) {
-      uniqueSkillMap.set(lowerKey, trimmed);
-    }
+export async function evaluateStudentJobMatching(studentId, driveId) {
+  if (!studentId || !driveId) {
+    throw new Error('studentId and driveId are required for job matching evaluation');
   }
 
-  const distinctSkills = Array.from(uniqueSkillMap.values());
-  const totalUniqueSkills = distinctSkills.length;
-
-  if (totalUniqueSkills === 0) {
-    return {
-      score: 0,
-      maxScore,
-      matchedSkills: [],
-      reason: 'No declared technical skills available to evaluate against role specifications.'
-    };
+  // 1. Fetch Authoritative Student Record
+  const student = await studentRepository.findStudentById(studentId);
+  if (!student) {
+    throw new Error(`Student with ID ${studentId} not found`);
   }
 
-  const combinedDriveText = `${role} ${description}`;
-  const normalizedDriveText = normalizeText(combinedDriveText);
-  const driveTokens = new Set(extractSearchTokens(combinedDriveText));
-
-  const matchedSkills = [];
-
-  for (const skill of distinctSkills) {
-    const normalizedSkill = normalizeText(skill).trim();
-    if (!normalizedSkill) continue;
-
-    // Direct multi-word phrase check (e.g., "data structures", "power systems")
-    if (normalizedDriveText.includes(normalizedSkill)) {
-      matchedSkills.push(skill);
-      continue;
-    }
-
-    // Individual keyword token match check (e.g., "react", "docker", "matlab")
-    const skillTokens = normalizedSkill.split(/\s+/).filter(Boolean);
-    const hasTokenMatch = skillTokens.some((token) => driveTokens.has(token));
-    if (hasTokenMatch) {
-      matchedSkills.push(skill);
-    }
+  // 2. Fetch Authoritative Drive Record
+  const drive = await driveRepository.findDriveById(driveId);
+  if (!drive) {
+    throw new Error(`Placement drive with ID ${driveId} not found`);
   }
 
-  const matchedCount = matchedSkills.length;
-  const rawScore = (matchedCount / totalUniqueSkills) * maxScore;
-  const score = Math.round(Math.min(maxScore, Math.max(0, rawScore)) * 10) / 10;
-
-  let reason = '';
-  if (matchedCount === totalUniqueSkills && totalUniqueSkills > 0) {
-    reason = `Full technical alignment: All ${matchedCount} declared skills matched role specifications (${score}/${maxScore} pts).`;
-  } else if (matchedCount > 0) {
-    reason = `Proportional skill match: ${matchedCount} of ${totalUniqueSkills} declared skills align with role requirements (${score}/${maxScore} pts).`;
-  } else {
-    reason = `No direct skill overlap: None of the ${totalUniqueSkills} declared candidate skills match role requirements (0/${maxScore} pts).`;
-  }
-
-  return {
-    score,
-    maxScore,
-    matchedSkills,
-    reason
-  };
-};
-
-/**
- * Determine match tier based on aggregate score
- */
-const getMatchLevel = (overallScore) => {
-  if (overallScore >= 80) return 'Strong Match';
-  if (overallScore >= 60) return 'Moderate Match';
-  return 'Developing Match';
-};
-
-/**
- * Calculate complete deterministic match breakdown for a student and drive
- */
-export const calculateStudentDriveMatch = (student, drive) => {
-  // 1. Branch Eligibility (25 pts)
-  const branchMaxScore = 25;
-  const studentBranch = (student.branch || '').toUpperCase();
-  const eligibleBranches = (drive.eligibleBranches || []).map((b) => b.toUpperCase());
-  const isBranchEligible = eligibleBranches.includes(studentBranch);
-  const branchScore = isBranchEligible ? branchMaxScore : 0;
-  const branchReason = isBranchEligible
-    ? `Student's branch (${studentBranch}) satisfies institutional eligibility criteria.`
-    : `Student's branch (${studentBranch}) is not listed under eligible disciplines (${eligibleBranches.join(', ')}).`;
-
-  // 2. Technical Skill Match (35 pts)
-  const skillResult = evaluateTechnicalSkillMatch(
-    student.technicalSkills || [],
-    drive.role || '',
-    drive.description || ''
+  // 3. Fetch Readiness Profile
+  let readinessScore = 0;
+  try {
+  const readiness = await readinessService.calculateStudentReadiness(student);
+  readinessScore = Number(
+    readiness?.totalScore ?? readiness?.readinessScore ?? 0
   );
+} catch {
+  readinessScore = Math.min(
+    100,
+    Math.round(((student.cgpa || 0) / 10) * 100)
+  );
+}
 
-  // 3. Placement Readiness (20 pts)
-  const readinessMaxScore = 20;
-  const studentReadiness = Number(student.readinessScore) || 0;
-  const readinessScore = Math.round(((studentReadiness / 100) * readinessMaxScore) * 10) / 10;
-  const readinessReason = `Placement readiness index of ${studentReadiness}% scaled to ${readinessScore}/${readinessMaxScore} points.`;
+  // Dimension 1: Branch Eligibility (Max 25 pts)
+  const eligibleBranches = normalizeSkillList(drive.eligibleBranches || drive.eligible_branches);
+  const studentBranch = (student.branch || '').trim().toUpperCase();
 
-  // 4. Mock Interview (10 pts)
-  const mockMaxScore = 10;
-  const studentMock = Number(student.mockInterviewScore) || 0;
-  const mockScore = Math.round(((studentMock / 100) * mockMaxScore) * 10) / 10;
-  const mockReason = `Mock interview rating of ${studentMock}% scaled to ${mockScore}/${mockMaxScore} points.`;
+  let branchMatched = true;
+  let branchReason = 'Open to all academic branches';
 
-  // 5. Communication (10 pts)
-  const commMaxScore = 10;
-  const studentComm = Number(student.communicationScore) || 0;
-  const commScore = Math.round(((studentComm / 100) * commMaxScore) * 10) / 10;
-  const commReason = `Communication proficiency rating of ${studentComm}% scaled to ${commScore}/${commMaxScore} points.`;
+  if (eligibleBranches.length > 0) {
+    const isEligible = eligibleBranches.some(
+      (b) => b.toUpperCase() === 'ALL' || b.toUpperCase() === studentBranch
+    );
+    branchMatched = isEligible;
+    branchReason = isEligible
+      ? `Student branch (${student.branch}) matches drive requirements`
+      : `Student branch (${student.branch}) is not in eligible branches (${eligibleBranches.join(', ')})`;
+  }
 
-  // Aggregate Total (100 pts)
-  const rawTotal = branchScore + skillResult.score + readinessScore + mockScore + commScore;
-  const overallMatchScore = Math.round(Math.min(100, Math.max(0, rawTotal)) * 10) / 10;
-  const matchLevel = getMatchLevel(overallMatchScore);
+  const branchScore = branchMatched ? 25 : 0;
 
-  // Generate Strengths & Improvement Areas
+  // Dimension 2: Technical Skill Matching (Max 35 pts)
+  const studentSkills = normalizeSkillList(student.technicalSkills || student.skills);
+  const driveSkills = normalizeSkillList(drive.requiredSkills || drive.required_skills || drive.skills);
+
+  const studentSkillsLower = new Map(studentSkills.map((s) => [s.toLowerCase(), s]));
+
+  let technicalStatus = 'AVAILABLE';
+  let technicalScore = 0;
+  let matchedSkills = [];
+  let missingSkills = [];
+  let technicalReason = '';
+
+  if (driveSkills.length === 0) {
+    technicalStatus = 'UNAVAILABLE';
+    technicalReason = 'Recruiter technical skills are not currently populated in drive records';
+  } else {
+    driveSkills.forEach((req) => {
+      const match = studentSkillsLower.get(req.toLowerCase());
+      if (match) {
+        matchedSkills.push(match);
+      } else {
+        missingSkills.push(req);
+      }
+    });
+
+    const matchRatio = matchedSkills.length / driveSkills.length;
+    technicalScore = Math.round(matchRatio * 35);
+    technicalReason = `${matchedSkills.length} of ${driveSkills.length} required technical skills verified`;
+  }
+
+  // Dimension 3: Academic & Placement Readiness (Max 25 pts)
+  // Scaled from 100-point readiness benchmark
+  const academicReadinessScore = Math.round((readinessScore / 100) * 25);
+  const academicReadinessReason = `Evaluated from institutional placement readiness rating (${readinessScore}/100)`;
+
+  // Dimension 4: Communication Readiness (Max 15 pts)
+  const rawComm = Number(student.communicationScore ?? student.communication_score ?? 0);
+  const commScore = Math.round((rawComm / 100) * 15);
+  const commReason = `Derived from communication score benchmark (${rawComm}/100)`;
+
+  // Calculate Overall Score
+  let overallMatchScore = 0;
+  if (technicalStatus === 'AVAILABLE') {
+    overallMatchScore = branchScore + technicalScore + academicReadinessScore + commScore;
+  } else {
+    // When technical requirements are unavailable, compute baseline from the active 65 points and normalize to 100
+    const activeScore = branchScore + academicReadinessScore + commScore;
+    const maxActiveScore = 65;
+    overallMatchScore = Math.round((activeScore / maxActiveScore) * 100);
+  }
+
+  // Match Level Determination
+  let matchLevel = 'Low Match';
+  if (overallMatchScore >= 80) matchLevel = 'Strong Match';
+  else if (overallMatchScore >= 60) matchLevel = 'Moderate Match';
+  else if (overallMatchScore >= 40) matchLevel = 'Developing Match';
+
+  // Strengths and Improvement Areas
   const strengths = [];
   const improvementAreas = [];
 
-  if (isBranchEligible) {
-    strengths.push(`Direct branch alignment with ${drive.company} eligibility requirements.`);
+  if (branchMatched) {
+    strengths.push(`Branch eligibility verified for ${student.branch}`);
   } else {
-    improvementAreas.push('Discipline mismatch: Candidate branch is not explicitly targeted for this drive.');
+    improvementAreas.push(`Candidate does not meet current branch screening (${eligibleBranches.join(', ')})`);
   }
 
-  if (skillResult.matchedSkills.length > 0) {
-    strengths.push(`Demonstrated proficiency in relevant tools: ${skillResult.matchedSkills.join(', ')}.`);
+  if (technicalStatus === 'AVAILABLE') {
+    if (matchedSkills.length > 0) {
+      strengths.push(`Verified skills: ${matchedSkills.join(', ')}`);
+    }
+    if (missingSkills.length > 0) {
+      improvementAreas.push(`Priority skills to acquire: ${missingSkills.join(', ')}`);
+    }
   } else {
-    improvementAreas.push('Technical depth: Expand project portfolio covering role-specific technologies.');
+    improvementAreas.push('Technical requirements pending from company job listing');
   }
 
-  if (studentReadiness >= 80) {
-    strengths.push(`Solid placement readiness foundation (${studentReadiness}% benchmark).`);
-  } else if (studentReadiness < 65) {
-    improvementAreas.push('Readiness gap: Reinforce core aptitude and fundamental assessment modules.');
+  if (readinessScore >= 70) {
+    strengths.push(`Solid placement readiness benchmark (${readinessScore}/100)`);
+  } else {
+    improvementAreas.push(`Readiness rating is developing (${readinessScore}/100)`);
   }
 
-  if (studentMock < 70) {
-    improvementAreas.push('Interview performance: Complete mock technical rounds to improve behavioral clarity.');
+  if (rawComm >= 75) {
+    strengths.push(`Strong professional communication benchmark (${rawComm}/100)`);
+  } else {
+    improvementAreas.push('Communication assessment polish recommended before interviews');
   }
 
-  if (studentComm < 70) {
-    improvementAreas.push('Communication articulation: Attend verbal reasoning and group discussion prep sessions.');
-  }
-
-  // Synthesize Prototype Recommendation
   let recommendation = '';
-  if (overallMatchScore >= 80) {
-    recommendation = `Priority candidate: Highly aligned for ${drive.company} (${drive.role}). Recommend expediting application and scheduling preliminary interview preparation.`;
-  } else if (overallMatchScore >= 60) {
-    recommendation = `Viable candidate: Suitable for ${drive.company} with targeted preparation in remaining skill gaps prior to assessment rounds.`;
+  if (!branchMatched) {
+    recommendation = `Candidate is outside eligible branch criteria for ${drive.company}. Seek company exemption or explore alternative aligned campus drives.`;
+  } else if (technicalStatus === 'UNAVAILABLE') {
+    recommendation = `Candidate satisfies branch and institutional readiness criteria. Technical alignment will calculate automatically once recruiter requirements are populated.`;
+  } else if (missingSkills.length > 0) {
+    recommendation = `Candidate is a prospective match for ${drive.company} (${drive.role}). Focus on acquiring ${missingSkills[0]} to maximize evaluation readiness.`;
   } else {
-    recommendation = `Development track recommended: Focus on core readiness assessments and skill enhancement before targeting ${drive.company}.`;
+    recommendation = `High suitability across academic, technical, and communication parameters. Proceed to company-specific interview preparation.`;
   }
 
   return {
@@ -212,37 +190,57 @@ export const calculateStudentDriveMatch = (student, drive) => {
     breakdown: {
       branchEligibility: {
         score: branchScore,
-        maxScore: branchMaxScore,
-        matched: isBranchEligible,
+        maxScore: 25,
+        matched: branchMatched,
         reason: branchReason
       },
       technicalSkillMatch: {
-        score: skillResult.score,
-        maxScore: skillResult.maxScore,
-        matchedSkills: skillResult.matchedSkills,
-        reason: skillResult.reason
+        score: technicalStatus === 'AVAILABLE' ? technicalScore : null,
+        maxScore: 35,
+        status: technicalStatus,
+        matchedSkills,
+        missingSkills,
+        reason: technicalReason
       },
       academicReadiness: {
-        score: readinessScore,
-        maxScore: readinessMaxScore,
-        studentScore: studentReadiness,
-        reason: readinessReason
-      },
-      mockInterview: {
-        score: mockScore,
-        maxScore: mockMaxScore,
-        studentScore: studentMock,
-        reason: mockReason
+        score: academicReadinessScore,
+        maxScore: 25,
+        readinessScore,
+        reason: academicReadinessReason
       },
       communication: {
         score: commScore,
-        maxScore: commMaxScore,
-        studentScore: studentComm,
+        maxScore: 15,
+        rawScore: rawComm,
         reason: commReason
       }
     },
     strengths,
     improvementAreas,
-    recommendation
+    recommendation,
+    disclaimer: 'Deterministic prototype compatibility analysis based on active database records. Does not guarantee recruitment or interview outcomes.'
   };
-};
+}
+
+/**
+ * Evaluates all placement drives for a given student.
+ *
+ * @param {string} studentId
+ * @returns {Promise<Array>}
+ */
+export async function evaluateStudentAgainstAllDrives(studentId) {
+  const drives = await driveRepository.findAllDrives();
+  if (!drives || drives.length === 0) return [];
+
+  const evaluations = [];
+  for (const drive of drives) {
+    try {
+      const res = await evaluateStudentJobMatching(studentId, drive.id);
+      evaluations.push(res);
+    } catch {
+      // Continue processing remaining drives
+    }
+  }
+
+  return evaluations.sort((a, b) => b.overallMatchScore - a.overallMatchScore);
+}
