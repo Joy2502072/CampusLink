@@ -8,7 +8,8 @@ import {
   MessageSquare,
   Building2,
   BarChart3,
-  Compass
+  Compass,
+  BrainCircuit
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { id: 'skill-gap', label: 'Skill Gap Analysis', icon: Building2 },
   { id: 'drives', label: 'Scheduler', icon: Calendar },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'curriculum-intelligence', label: 'Curriculum Intelligence', icon: BrainCircuit },
   { id: 'communication', label: 'Communication Hub', icon: MessageSquare }
 ];
 
