@@ -64,19 +64,12 @@ export default function RecruiterWorkflow({ onNavigate }) {
   const [activeGapStudent, setActiveGapStudent] = useState(null);
   const [gapDetailsMap, setGapDetailsMap] = useState({});
 
-  // 1. Fetch Authoritative Readiness for a student cohort from GET /api/students/:id/readiness
+  // 1. Fetch Authoritative Readiness directly from GET /api/readiness/student/:id
   const fetchStudentReadiness = useCallback(async (studentId) => {
     try {
-      let res = await fetch(`${API_BASE_URL}/students/${studentId}/readiness`, {
+      const res = await fetch(`${API_BASE_URL}/readiness/student/${studentId}`, {
         headers: AUTH_HEADERS
       });
-
-      // Backward-compatible fallback to /api/readiness/student/:id if route is mounted under readiness
-      if (!res.ok) {
-        res = await fetch(`${API_BASE_URL}/readiness/student/${studentId}`, {
-          headers: AUTH_HEADERS
-        });
-      }
 
       if (res.ok) {
         const json = await res.json();
@@ -555,7 +548,7 @@ export default function RecruiterWorkflow({ onNavigate }) {
 
             const isShortlisted = (shortlistedMap[selectedDriveId] || []).includes(stu.id);
 
-            // Authoritative readiness score from /api/students/:id/readiness
+            // Authoritative readiness score from /api/readiness/student/:id
             const authoritativeReadiness = readinessMap[stu.id];
 
             // Primary source of truth for matched skills: breakdown.technicalSkillMatch.matchedSkills
