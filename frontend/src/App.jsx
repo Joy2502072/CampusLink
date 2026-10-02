@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Layout from './components/layout/Layout.jsx';
 import DashboardHome from './components/dashboard/DashboardHome.jsx';
+import RecruiterWorkflow from './components/recruiter/RecruiterWorkflow.jsx';
 import StudentPortal from './components/studentPortal/StudentPortal.jsx';
 import AtRiskStudents from './components/atRisk/AtRiskStudents.jsx';
 import SchedulerOverview from './components/scheduler/SchedulerOverview.jsx';
@@ -10,7 +11,6 @@ import StudentJobMatching from './components/matching/StudentJobMatching.jsx';
 import SkillGapAnalysis from './components/skillGap/SkillGapAnalysis.jsx';
 import CurriculumIntelligence from './components/curriculum/CurriculumIntelligence.jsx';
 import AnalyticsOverview from './components/analytics/AnalyticsOverview.jsx';
-import PlaceholderView from './components/common/PlaceholderView.jsx';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -19,7 +19,9 @@ export default function App() {
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardHome />;
+        return <DashboardHome onNavigate={setActiveTab} />;
+      case 'recruiter-workflow':
+        return <RecruiterWorkflow onNavigate={setActiveTab} />;
       case 'student-portal':
         return <StudentPortal onNavigate={setActiveTab} />;
       case 'at-risk':
@@ -39,7 +41,7 @@ export default function App() {
       case 'communication':
         return <CommunicationHub />;
       default:
-        return <DashboardHome />;
+        return <DashboardHome onNavigate={setActiveTab} />;
     }
   };
 
