@@ -5,6 +5,7 @@ import RecruiterWorkflow from './components/recruiter/RecruiterWorkflow.jsx';
 import StudentPortal from './components/studentPortal/StudentPortal.jsx';
 import AtRiskStudents from './components/atRisk/AtRiskStudents.jsx';
 import SchedulerOverview from './components/scheduler/SchedulerOverview.jsx';
+import OfferTracking from './components/offers/OfferTracking.jsx';
 import CommunicationHub from './components/communication/CommunicationHub.jsx';
 import StudentReadiness from './components/readiness/StudentReadiness.jsx';
 import StudentJobMatching from './components/matching/StudentJobMatching.jsx';
@@ -34,6 +35,8 @@ export default function App() {
         return <SkillGapAnalysis />;
       case 'drives':
         return <SchedulerOverview />;
+      case 'offers':
+        return <OfferTracking />;
       case 'analytics':
         return <AnalyticsOverview />;
       case 'curriculum-intelligence':

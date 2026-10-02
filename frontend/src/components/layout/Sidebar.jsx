@@ -8,6 +8,7 @@ import {
   Target,
   FileSearch,
   Calendar,
+  FileCheck,
   BarChart3,
   BookOpen,
   MessageSquare
@@ -23,6 +24,7 @@ export default function Sidebar({ activeTab, onSelectTab }) {
     { id: 'matching', label: 'Job Matching', icon: Target },
     { id: 'skill-gap', label: 'Skill Gap Analysis', icon: FileSearch },
     { id: 'drives', label: 'Scheduler', icon: Calendar },
+    { id: 'offers', label: 'Offer & Documents', icon: FileCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'curriculum-intelligence', label: 'Curriculum Intelligence', icon: BookOpen },
     { id: 'communication', label: 'Communication Hub', icon: MessageSquare }
