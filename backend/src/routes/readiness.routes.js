@@ -1,15 +1,50 @@
-import express from 'express';
-import {
-  getAtRiskStudentsCohort,
-  getCohortReadiness,
-  getStudentReadinessById
-} from '../controllers/readiness.controller.js';
+import { Router } from 'express';
 
-const router = express.Router();
+import * as readinessController from '../controllers/readiness.controller.js';
 
-// Specific routes MUST be declared before the dynamic /:studentId parameter
-router.get('/at-risk', getAtRiskStudentsCohort);
-router.get('/cohort', getCohortReadiness);
-router.get('/:studentId', getStudentReadinessById);
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
+
+const router = Router();
+
+// What-If Simulation
+router.post(
+  '/what-if',
+  authenticate,
+  authorize('placement_officer', 'student', 'admin'),
+  readinessController.simulateWhatIfReadiness
+);
+
+// Cohort
+router.get(
+  '/cohort',
+  authenticate,
+  authorize('placement_officer', 'admin'),
+  readinessController.getCohortReadiness
+);
+
+// At-Risk
+router.get(
+  '/at-risk',
+  authenticate,
+  authorize('placement_officer', 'admin'),
+  readinessController.getAtRiskStudents
+);
+
+// Student alias
+router.get(
+  '/student/:studentId',
+  authenticate,
+  authorize('placement_officer', 'student', 'admin'),
+  readinessController.getStudentReadinessAlias
+);
+
+// Student readiness
+router.get(
+  '/:studentId',
+  authenticate,
+  authorize('placement_officer', 'student', 'admin'),
+  readinessController.getStudentReadiness
+);
 
 export default router;
