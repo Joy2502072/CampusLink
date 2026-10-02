@@ -18,6 +18,14 @@ export const drives = [
     venue: "Seminar Hall A",
     requiredResources: ["Auditorium Stage", "Projector Array"],
     eligibleBranches: ["CSE", "IT"],
+    requiredSkills: [
+      "Java",
+      "Spring Boot",
+      "REST API",
+      "Microservices",
+      "Docker",
+      "SQL"
+    ],
     status: "Confirmed",
     packageLPA: "18.5 LPA",
     openings: 12,
@@ -35,6 +43,14 @@ export const drives = [
     venue: "Seminar Hall A",
     requiredResources: ["High-Speed LAN", "Projector Array"],
     eligibleBranches: ["CSE", "IT", "ECE"],
+    requiredSkills: [
+      "Cybersecurity",
+      "Network Security",
+      "Linux",
+      "Penetration Testing",
+      "SIEM",
+      "OWASP"
+    ],
     status: "Scheduled",
     packageLPA: "14.0 LPA",
     openings: 8,
@@ -52,6 +68,14 @@ export const drives = [
     venue: "Auditorium 1",
     requiredResources: ["Auditorium Stage", "Audio System"],
     eligibleBranches: ["CSE", "IT"],
+    requiredSkills: [
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "CI/CD",
+      "Linux",
+      "Terraform"
+    ],
     status: "Confirmed",
     packageLPA: "22.0 LPA",
     openings: 15,
@@ -69,6 +93,14 @@ export const drives = [
     venue: "Seminar Hall B",
     requiredResources: ["Projector Array", "Interview Booths"],
     eligibleBranches: ["ECE", "EE"],
+    requiredSkills: [
+      "SystemVerilog",
+      "UVM",
+      "Verilog",
+      "Digital Logic",
+      "RTL",
+      "ASIC"
+    ],
     status: "Confirmed",
     packageLPA: "16.5 LPA",
     openings: 6,
@@ -86,6 +118,14 @@ export const drives = [
     venue: "Seminar Hall B",
     requiredResources: ["Dual Screen Display"],
     eligibleBranches: ["ECE"],
+    requiredSkills: [
+      "Verilog",
+      "RTL Design",
+      "VLSI",
+      "CMOS",
+      "Digital Logic",
+      "Synthesis"
+    ],
     status: "Scheduled",
     packageLPA: "19.0 LPA",
     openings: 5,
@@ -103,6 +143,14 @@ export const drives = [
     venue: "Seminar Hall B",
     requiredResources: ["Computer Lab 1", "Workstations"],
     eligibleBranches: ["CSE", "MECH"],
+    requiredSkills: [
+      "Python",
+      "Algorithms",
+      "Optimization",
+      "Operations Research",
+      "NumPy",
+      "Data Structures"
+    ],
     status: "Scheduled",
     packageLPA: "12.5 LPA",
     openings: 10,
@@ -120,6 +168,14 @@ export const drives = [
     venue: "Placement Interview Suite",
     requiredResources: ["Computer Lab 1"],
     eligibleBranches: ["EE", "MECH"],
+    requiredSkills: [
+      "PLC",
+      "MATLAB",
+      "Control Systems",
+      "Robotics",
+      "Kinematics",
+      "Industrial Automation"
+    ],
     status: "Scheduled",
     packageLPA: "11.0 LPA",
     openings: 7,
@@ -137,6 +193,14 @@ export const drives = [
     venue: "Seminar Hall A",
     requiredResources: ["CAD Workstations"],
     eligibleBranches: ["CIVIL", "MECH"],
+    requiredSkills: [
+      "AutoCAD",
+      "Structural Analysis",
+      "STAAD.Pro",
+      "Civil Engineering",
+      "Concrete Design",
+      "CAD"
+    ],
     status: "Confirmed",
     packageLPA: "8.5 LPA",
     openings: 14,
@@ -154,6 +218,14 @@ export const drives = [
     venue: "Auditorium 1",
     requiredResources: ["Auditorium Stage"],
     eligibleBranches: ["CSE", "IT"],
+    requiredSkills: [
+      "Python",
+      "SQL",
+      "Statistics",
+      "Bioinformatics",
+      "Pandas",
+      "Data Analysis"
+    ],
     status: "Confirmed",
     packageLPA: "15.0 LPA",
     openings: 9,
@@ -171,6 +243,14 @@ export const drives = [
     venue: "Computer Lab 2",
     requiredResources: ["MATLAB Suite"],
     eligibleBranches: ["EE", "ECE"],
+    requiredSkills: [
+      "MATLAB",
+      "Power Systems",
+      "Smart Grid",
+      "Renewable Energy",
+      "Power Electronics",
+      "Electrical Engineering"
+    ],
     status: "Confirmed",
     packageLPA: "10.5 LPA",
     openings: 11,

@@ -9,6 +9,7 @@ import StudentReadiness from './components/readiness/StudentReadiness.jsx';
 import StudentJobMatching from './components/matching/StudentJobMatching.jsx';
 import SkillGapAnalysis from './components/skillGap/SkillGapAnalysis.jsx';
 import CurriculumIntelligence from './components/curriculum/CurriculumIntelligence.jsx';
+import AnalyticsOverview from './components/analytics/AnalyticsOverview.jsx';
 import PlaceholderView from './components/common/PlaceholderView.jsx';
 
 export default function App() {
@@ -32,12 +33,7 @@ export default function App() {
       case 'drives':
         return <SchedulerOverview />;
       case 'analytics':
-        return (
-          <PlaceholderView
-            title="Advanced Placement Analytics"
-            description="Deep cohort segmentation, company tiers, and recruiter retention analytics will be available here."
-          />
-        );
+        return <AnalyticsOverview />;
       case 'curriculum-intelligence':
         return <CurriculumIntelligence />;
       case 'communication':
