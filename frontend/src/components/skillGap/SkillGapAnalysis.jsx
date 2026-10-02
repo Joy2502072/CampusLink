@@ -1,949 +1,723 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Sparkles, 
-  AlertCircle, 
-  CheckCircle2, 
-  AlertTriangle, 
-  RefreshCw, 
-  Briefcase, 
-  Building2, 
-  GraduationCap, 
-  Calendar, 
-  Clock, 
-  Lightbulb, 
-  TrendingUp, 
-  ShieldAlert, 
-  Check, 
-  Minus, 
-  X,
-  Target
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Briefcase,
+  AlertTriangle,
+  RefreshCw,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  TrendingUp,
+  FolderGit2,
+  ChevronRight,
+  ShieldCheck,
+  Building2,
+  Target,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 const DEMO_STUDENT_ID = 'DEMO-STU-001';
-const DEFAULT_DRIVE_ID = 'DRV-201';
 
-export default function SkillGapAnalysis() {
-  const [drivesList, setDrivesList] = useState([]);
-  const [selectedDriveId, setSelectedDriveId] = useState(DEFAULT_DRIVE_ID);
+const AUTH_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Demo-User-Role': 'placement_officer'
+};
+
+export default function SkillGapAnalysis({ studentId = DEMO_STUDENT_ID }) {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [drives, setDrives] = useState([]);
+  const [selectedDriveId, setSelectedDriveId] = useState('');
   const [analysisData, setAnalysisData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDrivesLoading, setIsDrivesLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState(null);
 
-  // 1. Fetch all placement drives for the selector
-  useEffect(() => {
-    let isMounted = true;
-    const fetchDrives = async () => {
-      setIsDrivesLoading(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/drives`);
-        if (!response.ok) {
-          throw new Error(`Failed to load drives (HTTP ${response.status})`);
-        }
-        const json = await response.json();
-        if (isMounted) {
-          if (json && json.success && Array.isArray(json.data)) {
-            setDrivesList(json.data);
-          } else {
-            setDrivesList([]);
-          }
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Drive list error:', err);
-          setDrivesList([]);
-        }
-      } finally {
-        if (isMounted) {
-          setIsDrivesLoading(false);
-        }
-      }
-    };
-
-    fetchDrives();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // 2. Fetch skill gap analysis for DEMO_STUDENT_ID + selectedDriveId
-  const fetchSkillGap = useCallback(async (driveId) => {
-    if (!driveId) return;
-    setIsLoading(true);
-    setErrorMessage(null);
-
+  // 1. Fetch available placement drives with required authentication header
+  const fetchDrives = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/skill-gap/student/${DEMO_STUDENT_ID}/drive/${driveId}`);
-      if (!response.ok) {
-        throw new Error(`Unable to fetch skill gap analysis (HTTP ${response.status}: ${response.statusText})`);
+      const res = await fetch(`${API_BASE_URL}/drives`, {
+        headers: AUTH_HEADERS
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to load drives (HTTP ${res.status})`);
       }
 
-      const json = await response.json();
+      const json = await res.json();
+      const list = Array.isArray(json?.data)
+        ? json.data
+        : (Array.isArray(json) ? json : []);
 
-      if (!json || json.success !== true || !json.data) {
-        throw new Error(json?.message || 'Malformed API response from skill gap service');
+      setDrives(list);
+
+      if (list.length > 0 && !selectedDriveId) {
+        setSelectedDriveId(list[0].id);
       }
-
-      setAnalysisData(json.data);
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to connect to the skill gap analysis service.');
+      setError(err.message || 'Error occurred while loading placement drives.');
+    }
+  }, [selectedDriveId]);
+
+  // 2. Fetch Skill Gap Evaluation for the selected student & drive with required authentication header
+  const fetchGapAnalysis = useCallback(async (driveId) => {
+    if (!driveId) return;
+    setError(null);
+    setRefreshing(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/skill-gap/student/${studentId}/drive/${driveId}`,
+        {
+          headers: AUTH_HEADERS
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to compute skill gap (HTTP ${res.status})`);
+      }
+
+      const json = await res.json();
+      setAnalysisData(json?.data || json);
+    } catch (err) {
+      setError(err.message || 'Error evaluating skill gap for selected drive.');
       setAnalysisData(null);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [studentId]);
 
   useEffect(() => {
-    fetchSkillGap(selectedDriveId);
-  }, [selectedDriveId, fetchSkillGap]);
+    fetchDrives();
+  }, [fetchDrives]);
 
-  const getSeverityStyle = (severity) => {
-    switch (severity) {
-      case 'Low':
-        return {
-          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-          color: 'var(--accent-emerald, #34d399)',
-          border: '1px solid rgba(16, 185, 129, 0.3)'
-        };
-      case 'Moderate':
-      case 'Medium':
-        return {
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          color: 'var(--accent-blue, #60a5fa)',
-          border: '1px solid rgba(59, 130, 246, 0.3)'
-        };
-      case 'High':
-        return {
-          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-          color: 'var(--accent-amber, #fbbf24)',
-          border: '1px solid rgba(245, 158, 11, 0.3)'
-        };
-      case 'Critical':
-        return {
-          backgroundColor: 'rgba(239, 68, 68, 0.12)',
-          color: 'var(--accent-red, #f87171)',
-          border: '1px solid rgba(239, 68, 68, 0.3)'
-        };
-      default:
-        return {
-          backgroundColor: 'rgba(148, 163, 184, 0.12)',
-          color: 'var(--text-muted, #94a3b8)',
-          border: '1px solid rgba(148, 163, 184, 0.3)'
-        };
+  useEffect(() => {
+    if (selectedDriveId) {
+      fetchGapAnalysis(selectedDriveId);
+    }
+  }, [selectedDriveId, fetchGapAnalysis]);
+
+  const handleDriveChange = (e) => {
+    setSelectedDriveId(e.target.value);
+  };
+
+  const handleRefresh = () => {
+    if (selectedDriveId) {
+      fetchGapAnalysis(selectedDriveId);
     }
   };
 
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case 'High':
-        return {
-          backgroundColor: 'rgba(239, 68, 68, 0.12)',
-          color: 'var(--accent-red, #f87171)',
-          border: '1px solid rgba(239, 68, 68, 0.25)'
-        };
-      case 'Medium':
-        return {
-          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-          color: 'var(--accent-amber, #fbbf24)',
-          border: '1px solid rgba(245, 158, 11, 0.25)'
-        };
-      default:
-        return {
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          color: 'var(--accent-blue, #60a5fa)',
-          border: '1px solid rgba(59, 130, 246, 0.25)'
-        };
+  // Safe field extractions supporting both current backend contract and legacy fallback keys
+  const matched = useMemo(() => {
+    if (Array.isArray(analysisData?.matchedSkills)) return analysisData.matchedSkills;
+    return [];
+  }, [analysisData]);
+
+  const partial = useMemo(() => {
+    if (Array.isArray(analysisData?.partialSkills)) return analysisData.partialSkills;
+    return [];
+  }, [analysisData]);
+
+  const missing = useMemo(() => {
+    if (Array.isArray(analysisData?.missingSkills)) return analysisData.missingSkills;
+    return [];
+  }, [analysisData]);
+
+  const coverage = useMemo(() => {
+    const rawVal =
+      analysisData?.skillCoverage ??
+      analysisData?.coveragePercentage ??
+      analysisData?.skillCoverageScore ??
+      0;
+    return Math.max(0, Math.min(100, Math.round(Number(rawVal) || 0)));
+  }, [analysisData]);
+
+  const totalRequired = useMemo(() => {
+    return (
+      analysisData?.totalRequiredSkills ??
+      (matched.length + partial.length + missing.length)
+    );
+  }, [analysisData, matched.length, partial.length, missing.length]);
+
+  const actions = useMemo(() => {
+    if (Array.isArray(analysisData?.recommendedActions)) return analysisData.recommendedActions;
+    if (Array.isArray(analysisData?.recommendations)) return analysisData.recommendations;
+    if (Array.isArray(analysisData?.actionPlan)) return analysisData.actionPlan;
+    return [];
+  }, [analysisData]);
+
+  const priorityMissing = useMemo(() => {
+    if (Array.isArray(analysisData?.priorityMissingSkills) && analysisData.priorityMissingSkills.length > 0) {
+      return analysisData.priorityMissingSkills;
     }
+    return missing.slice(0, 3);
+  }, [analysisData, missing]);
+
+  const gapSeverity = useMemo(() => {
+    if (analysisData?.gapSeverity) return analysisData.gapSeverity;
+    if (coverage >= 75) return 'Low Gap';
+    if (coverage >= 40) return 'Moderate Gap';
+    return 'Critical Gap';
+  }, [analysisData, coverage]);
+
+  const getCoverageColor = (pct) => {
+    if (pct >= 75) return '#10b981';
+    if (pct >= 40) return '#f59e0b';
+    return '#ef4444';
   };
+
+  const coverageColor = getCoverageColor(coverage);
+
+  const getSeverityBadgeStyle = (sev) => {
+    const lower = String(sev || '').toLowerCase();
+    if (lower.includes('low')) {
+      return { bg: 'rgba(16, 185, 129, 0.12)', color: '#34d399', border: 'rgba(16, 185, 129, 0.3)' };
+    }
+    if (lower.includes('moderate') || lower.includes('medium')) {
+      return { bg: 'rgba(245, 158, 11, 0.12)', color: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' };
+    }
+    return { bg: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)' };
+  };
+
+  const severityBadge = getSeverityBadgeStyle(gapSeverity);
+
+  if (loading && !analysisData) {
+    return (
+      <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
+        <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+        <p style={{ margin: 0, fontSize: '0.875rem' }}>Evaluating candidate technical profile against drive requirements...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', boxSizing: 'border-box' }}>
-      
-      {/* 1. Page Header */}
-      <div 
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px',
-          paddingBottom: '16px',
-          borderBottom: '1px solid var(--border-color, #1e293b)'
-        }}
-      >
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Page Header & Drive Selector */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.02em' }}>
-              Skill Gap & Improvement
+            <h1 style={{ margin: 0, fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.02em' }}>
+              Skill Gap Analysis
             </h1>
-            <span 
+            <span
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                borderRadius: '6px',
+                gap: '5px',
+                padding: '3px 10px',
+                borderRadius: '999px',
                 fontSize: '11px',
                 fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
                 backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                color: 'var(--accent-blue, #818cf8)',
+                color: '#818cf8',
                 border: '1px solid rgba(99, 102, 241, 0.25)'
               }}
             >
-              <Sparkles size={12} />
-              Explainable Analysis
+              <Briefcase size={12} /> Target Drive Diagnostics
             </span>
           </div>
           <p style={{ margin: '6px 0 0 0', fontSize: '0.875rem', color: 'var(--text-secondary, #94a3b8)' }}>
-            Understand what skills you are missing for your target placement drive.
+            Compare candidate verified technical profile and project evidence against active recruitment drives
           </p>
         </div>
 
-        {/* Target Drive Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label 
-            htmlFor="drive-selector" 
-            style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted, #64748b)' }}
-          >
-            Target Drive:
-          </label>
-          <select
-            id="drive-selector"
-            value={selectedDriveId}
-            onChange={(e) => setSelectedDriveId(e.target.value)}
-            disabled={isDrivesLoading || drivesList.length === 0}
-            style={{
-              backgroundColor: 'var(--bg-sidebar, #0f172a)',
-              color: 'var(--text-primary, #f8fafc)',
-              border: '1px solid var(--border-color, #334155)',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '0.875rem',
-              outline: 'none',
-              cursor: drivesList.length > 0 ? 'pointer' : 'default'
-            }}
-          >
-            {isDrivesLoading ? (
-              <option value="" disabled>Loading placement drives...</option>
-            ) : drivesList.length > 0 ? (
-              drivesList.map((d) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Building2 size={16} color="#818cf8" />
+            <select
+              value={selectedDriveId}
+              onChange={handleDriveChange}
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                fontSize: '0.875rem',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {drives.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.company} &bull; {d.role} ({d.packageLPA})
+                  {d.company} – {d.role}
                 </option>
-              ))
-            ) : (
-              <option value="" disabled>No placement drives available</option>
-            )}
-          </select>
-        </div>
-      </div>
-
-      {/* 2. Student & Target Drive Context Card */}
-      <div 
-        style={{
-          backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-          border: '1px solid var(--border-color, #1e293b)',
-          borderRadius: '12px',
-          padding: '18px 24px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div 
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '10px',
-              backgroundColor: 'rgba(99, 102, 241, 0.12)',
-              color: 'var(--accent-blue, #818cf8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <GraduationCap size={22} />
+              ))}
+            </select>
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                {analysisData?.studentName || '—'}
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontFamily: 'monospace' }}>
-                ({analysisData?.studentId || '—'})
-              </span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)' }}>
-              Branch: {analysisData?.branch || '—'}
-            </span>
-          </div>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', borderRadius: '8px', backgroundColor: 'rgba(30, 41, 59, 0.45)', border: '1px solid var(--border-color, #1e293b)' }}>
-          <Building2 size={16} style={{ color: 'var(--accent-blue, #818cf8)' }} />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary, #f1f5f9)' }}>
-              {analysisData?.targetDrive?.company || '—'}
-            </span>
-            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted, #64748b)' }}>
-              {analysisData?.targetDrive?.role || '—'} &bull; {analysisData?.targetDrive?.packageLPA || '—'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Loading View */}
-      {isLoading && (
-        <div 
-          style={{
-            backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-            border: '1px solid var(--border-color, #1e293b)',
-            borderRadius: '12px',
-            padding: '48px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px'
-          }}
-        >
-          <RefreshCw size={28} color="var(--accent-blue, #6366f1)" style={{ animation: 'spin 1s linear infinite' }} />
-          <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary, #f1f5f9)' }}>
-            Analyzing target drive skill requirements...
-          </p>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>
-            Comparing {DEMO_STUDENT_ID} profile against {selectedDriveId}
-          </span>
-        </div>
-      )}
-
-      {/* Error View */}
-      {!isLoading && errorMessage && (
-        <div 
-          style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '12px',
-            padding: '32px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px'
-          }}
-        >
-          <div 
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <AlertCircle size={24} color="var(--accent-red, #f87171)" />
-          </div>
-          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#fca5a5' }}>
-            Skill Gap Service Unavailable
-          </h2>
-          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--accent-red, #f87171)', maxWidth: '460px' }}>
-            {errorMessage}
-          </p>
           <button
-            onClick={() => fetchSkillGap(selectedDriveId)}
+            onClick={handleRefresh}
+            disabled={refreshing}
             style={{
-              marginTop: '6px',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              backgroundColor: '#dc2626',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
+              gap: '8px',
               padding: '8px 16px',
-              fontSize: '0.75rem',
+              backgroundColor: 'var(--bg-card, #1e293b)',
+              border: '1px solid var(--border-color, #334155)',
+              borderRadius: '8px',
+              color: 'var(--text-primary, #f1f5f9)',
+              fontSize: '0.875rem',
               fontWeight: 600,
-              cursor: 'pointer'
+              cursor: refreshing ? 'not-allowed' : 'pointer',
+              opacity: refreshing ? 0.6 : 1
             }}
           >
-            <RefreshCw size={13} />
-            Retry Analysis
+            <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            {refreshing ? 'Evaluating...' : 'Refresh'}
           </button>
+        </div>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.875rem'
+          }}
+        >
+          <AlertTriangle size={18} />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Loaded Analysis View */}
-      {!isLoading && analysisData && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* 4. Skill Coverage Hero Card */}
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-              border: '1px solid var(--border-color, #1e293b)',
-              borderRadius: '12px',
-              padding: '24px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '24px',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '220px' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Skill Coverage
+      {/* Target Drive & Summary Card */}
+      {analysisData && (
+        <div
+          style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid #1e293b',
+            borderRadius: '14px',
+            padding: '24px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '24px',
+            alignItems: 'center'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Target Role &amp; Company
               </span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.02em', lineHeight: 1 }}>
-                  {analysisData.skillCoverageScore}%
-                </span>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted, #64748b)' }}>
-                  Profile Alignment
-                </span>
-              </div>
-              <div style={{ marginTop: '4px' }}>
-                <span 
-                  style={{
-                    display: 'inline-block',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    ...getSeverityStyle(analysisData.gapSeverity)
-                  }}
-                >
-                  Gap Severity: {analysisData.gapSeverity}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
-                <span style={{ color: 'var(--text-primary, #e2e8f0)', fontWeight: 600 }}>
-                  Target Requirement Coverage
-                </span>
-                <span style={{ color: 'var(--text-muted, #64748b)', fontFamily: 'monospace', fontWeight: 600 }}>
-                  {analysisData.skillCoverageScore}%
-                </span>
-              </div>
-
-              {/* Progress Track */}
-              <div 
+              <span
                 style={{
-                  width: '100%',
-                  height: '10px',
-                  backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
                   borderRadius: '999px',
-                  overflow: 'hidden',
-                  border: '1px solid var(--border-color, #334155)'
+                  backgroundColor: severityBadge.bg,
+                  color: severityBadge.color,
+                  border: `1px solid ${severityBadge.border}`
                 }}
-                role="progressbar"
-                aria-valuenow={analysisData.skillCoverageScore}
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-label="Skill coverage score percentage"
               >
-                <div 
-                  style={{
-                    width: `${Math.min(100, Math.max(0, analysisData.skillCoverageScore))}%`,
-                    height: '100%',
-                    backgroundColor: 'var(--accent-blue, #6366f1)',
-                    borderRadius: '999px',
-                    transition: 'width 0.4s ease-out'
-                  }}
-                />
-              </div>
-
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', marginTop: '2px' }}>
-                Calculated deterministically from target drive requirements versus current student skills.
+                {gapSeverity}
               </span>
             </div>
-          </div>
 
-          {/* 5. Skills Section: Matched, Partial, and Missing Groups */}
-          <div 
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '16px'
-            }}
-          >
-            {/* Matched Skills */}
-            <div 
-              style={{
-                backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-                border: '1px solid var(--border-color, #1e293b)',
-                borderRadius: '12px',
-                padding: '20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Check size={14} color="var(--accent-emerald, #34d399)" />
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                    Matched Skills
-                  </h3>
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-emerald, #34d399)' }}>
-                  {analysisData.matchedSkills?.length || 0}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {analysisData.matchedSkills && analysisData.matchedSkills.length > 0 ? (
-                  analysisData.matchedSkills.map((skill, idx) => (
-                    <span 
-                      key={idx}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        color: 'var(--accent-emerald, #34d399)',
-                        border: '1px solid rgba(16, 185, 129, 0.25)'
-                      }}
-                    >
-                      {skill}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                    No exact matching skills found.
-                  </span>
-                )}
-              </div>
+            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff' }}>
+              {analysisData.role || 'Role Specification'}
+            </div>
+            <div style={{ fontSize: '0.875rem', color: '#818cf8', marginTop: '2px', fontWeight: 600 }}>
+              {analysisData.company || 'Recruiting Company'} ({analysisData.driveId || selectedDriveId})
             </div>
 
-            {/* Partial Skills */}
-            <div 
-              style={{
-                backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-                border: '1px solid var(--border-color, #1e293b)',
-                borderRadius: '12px',
-                padding: '20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Minus size={14} color="var(--accent-blue, #60a5fa)" />
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                    Partial Skills
-                  </h3>
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-blue, #60a5fa)' }}>
-                  {analysisData.partialSkills?.length || 0}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {analysisData.partialSkills && analysisData.partialSkills.length > 0 ? (
-                  analysisData.partialSkills.map((item, idx) => (
-                    <span 
-                      key={idx}
-                      title={item.note || ''}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        color: 'var(--accent-blue, #60a5fa)',
-                        border: '1px solid rgba(59, 130, 246, 0.25)',
-                        cursor: 'help'
-                      }}
-                    >
-                      {item.requiredSkill || item}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                    No partial skill equivalents detected.
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Missing Skills */}
-            <div 
-              style={{
-                backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-                border: '1px solid var(--border-color, #1e293b)',
-                borderRadius: '12px',
-                padding: '20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={14} color="var(--accent-red, #f87171)" />
-                  </div>
-                  <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                    Missing Skills
-                  </h3>
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-red, #f87171)' }}>
-                  {analysisData.missingSkills?.length || 0}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {analysisData.missingSkills && analysisData.missingSkills.length > 0 ? (
-                  analysisData.missingSkills.map((skill, idx) => (
-                    <span 
-                      key={idx}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        color: 'var(--accent-red, #f87171)',
-                        border: '1px solid rgba(239, 68, 68, 0.25)'
-                      }}
-                    >
-                      {skill}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                    All target skills are matched.
-                  </span>
-                )}
-              </div>
+            <div style={{ marginTop: '14px', fontSize: '0.8125rem', color: '#94a3b8' }}>
+              Candidate: <strong style={{ color: '#cbd5e1' }}>{analysisData.studentName || 'Candidate Profile'}</strong> ({analysisData.studentId || studentId})
             </div>
           </div>
 
-          {/* 6. Priority Missing Skills */}
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-              border: '1px solid var(--border-color, #1e293b)',
-              borderRadius: '12px',
-              padding: '24px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <Target size={18} color="var(--accent-amber, #fbbf24)" />
-              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                Priority Missing Skills
-              </h2>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.8125rem', color: '#cbd5e1', fontWeight: 600 }}>
+                Prerequisite Skill Coverage
+              </span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 800, color: coverageColor, fontFamily: 'monospace' }}>
+                {coverage}%
+              </span>
             </div>
 
-            {Array.isArray(analysisData.priorityMissingSkills) && analysisData.priorityMissingSkills.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {analysisData.priorityMissingSkills.map((item, idx) => (
-                  <div 
+            <div style={{ height: '8px', backgroundColor: '#1e293b', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ width: `${coverage}%`, height: '100%', backgroundColor: coverageColor, transition: 'width 0.4s ease' }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8', marginTop: '8px' }}>
+              <span>{totalRequired} Total Required</span>
+              <span>Matched: {matched.length} • Partial: {partial.length} • Missing: {missing.length}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3-Column Categorization View */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: '20px'
+        }}
+      >
+        {/* 1. Matched Skills */}
+        <div
+          style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: '12px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle2 size={18} color="#10b981" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+                Matched Skills
+              </h3>
+            </div>
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                color: '#34d399',
+                fontWeight: 700
+              }}
+            >
+              {matched.length} Verified
+            </span>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
+            Skills verified in the student's authoritative profile that satisfy target drive requirements.
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {matched.length > 0 ? (
+              matched.map((sk, idx) => {
+                const label = typeof sk === 'string' ? sk : (sk.skill || sk.name || JSON.stringify(sk));
+                return (
+                  <span
                     key={idx}
                     style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '12px',
-                      backgroundColor: 'rgba(30, 41, 59, 0.4)',
-                      border: '1px solid var(--border-color, #1e293b)',
-                      borderRadius: '8px',
-                      padding: '12px 16px'
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      color: '#34d399',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 240px' }}>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #f1f5f9)' }}>
-                        {item.skill}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.4 }}>
-                        {item.reason}
-                      </span>
-                    </div>
-
-                    <span 
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                        ...getPriorityStyle(item.priority)
-                      }}
-                    >
-                      {item.priority} Priority
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    ✓ {label}
+                  </span>
+                );
+              })
             ) : (
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                No priority skill deficiencies identified for this drive.
-              </p>
+              <span style={{ fontSize: '0.8125rem', color: '#64748b', fontStyle: 'italic' }}>
+                No direct verified skills matched for this role.
+              </span>
             )}
           </div>
+        </div>
 
-          {/* 7. Personalized Recommendations */}
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-              border: '1px solid var(--border-color, #1e293b)',
-              borderRadius: '12px',
-              padding: '24px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <Lightbulb size={18} color="var(--accent-blue, #818cf8)" />
-              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                Personalized Recommendations
-              </h2>
+        {/* 2. Partial Skills (Evidence in Projects) */}
+        <div
+          style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '12px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} color="#f59e0b" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+                Partial Skills (Evidenced)
+              </h3>
             </div>
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                color: '#fbbf24',
+                fontWeight: 700
+              }}
+            >
+              {partial.length} Evidenced
+            </span>
+          </div>
 
-            {Array.isArray(analysisData.recommendations) && analysisData.recommendations.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {analysisData.recommendations.map((rec, idx) => (
-                  <div 
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
+            Observed in candidate project repositories, but not yet verified as a formal competency.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {partial.length > 0 ? (
+              partial.map((item, idx) => {
+                const skillName = typeof item === 'string' ? item : (item.skill || item.name || 'Competency');
+                const evidence = typeof item === 'object' ? item.evidence : null;
+                const reason = typeof item === 'object' ? (item.reason || item.verificationRequired) : null;
+
+                return (
+                  <div
                     key={idx}
                     style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '12px',
-                      backgroundColor: 'rgba(30, 41, 59, 0.35)',
-                      border: '1px solid var(--border-color, #1e293b)',
+                      padding: '10px 12px',
                       borderRadius: '8px',
-                      padding: '12px 14px'
-                    }}
-                  >
-                    <span 
-                      style={{
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                        color: 'var(--accent-blue, #818cf8)',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      {idx + 1}
-                    </span>
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary, #cbd5e1)', lineHeight: 1.5 }}>
-                      {rec}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                No active recommendations queued.
-              </p>
-            )}
-          </div>
-
-          {/* 8. 7-Day Action Plan */}
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-              border: '1px solid var(--border-color, #1e293b)',
-              borderRadius: '12px',
-              padding: '24px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <Calendar size={18} color="var(--accent-blue, #818cf8)" />
-              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                7-Day Action Plan
-              </h2>
-            </div>
-
-            {Array.isArray(analysisData.actionPlan) && analysisData.actionPlan.length > 0 ? (
-              <div 
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                  gap: '12px'
-                }}
-              >
-                {analysisData.actionPlan.map((planItem) => (
-                  <div 
-                    key={planItem.day}
-                    style={{
-                      backgroundColor: 'rgba(30, 41, 59, 0.4)',
-                      border: '1px solid var(--border-color, #1e293b)',
-                      borderRadius: '8px',
-                      padding: '14px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                      border: '1px solid rgba(245, 158, 11, 0.25)',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '8px'
+                      gap: '4px'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-blue, #818cf8)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Day {planItem.day}
+                      <span style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.875rem' }}>
+                        {skillName}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted, #64748b)', fontSize: '0.6875rem' }}>
-                        <Clock size={12} />
-                        <span>{planItem.estimatedMinutes}m</span>
-                      </div>
+                      <span style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>
+                        Unverified Project Evidence
+                      </span>
                     </div>
 
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary, #f1f5f9)' }}>
-                      {planItem.focus}
-                    </span>
+                    {evidence && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+                        <FolderGit2 size={12} color="#f59e0b" />
+                        <span>Project: <strong>{evidence}</strong></span>
+                      </div>
+                    )}
 
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.45 }}>
-                      {planItem.action}
-                    </p>
+                    {reason && (
+                      <div style={{ fontSize: '0.6875rem', color: '#94a3b8', lineHeight: 1.35, marginTop: '2px' }}>
+                        {reason}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                );
+              })
             ) : (
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
-                No action plan available.
-              </p>
+              <span style={{ fontSize: '0.8125rem', color: '#64748b', fontStyle: 'italic' }}>
+                No practical partial evidence observed for missing prerequisites.
+              </span>
             )}
           </div>
+        </div>
 
-          {/* 9. What-If Simulation */}
-          <div 
-            style={{
-              backgroundColor: 'var(--bg-card, var(--bg-sidebar, #0f172a))',
-              border: '1px solid var(--border-color, #1e293b)',
-              borderRadius: '12px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <TrendingUp size={18} color="var(--accent-emerald, #34d399)" />
-                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)' }}>
-                  {analysisData.whatIfSimulation?.label || 'Prototype What-if Simulation'}
-                </h2>
-              </div>
-              <span 
-                style={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                  color: 'var(--accent-blue, #818cf8)'
-                }}
-              >
-                Simulation Only
-              </span>
+        {/* 3. Missing Skills */}
+        <div
+          style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <XCircle size={18} color="#ef4444" />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+                Missing Skills
+              </h3>
             </div>
-
-            <div 
+            <span
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '16px'
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                color: '#f87171',
+                fontWeight: 700
               }}
             >
-              {/* Current Coverage Box */}
-              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(30, 41, 59, 0.45)', border: '1px solid var(--border-color, #1e293b)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontWeight: 600 }}>
-                  Current Skill Coverage
-                </span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary, #ffffff)', marginTop: '4px' }}>
-                  {analysisData.whatIfSimulation?.currentSkillCoverage}%
-                </div>
-              </div>
+              {missing.length} Gaps
+            </span>
+          </div>
 
-              {/* Assumed Added Skills */}
-              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(30, 41, 59, 0.45)', border: '1px solid var(--border-color, #1e293b)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontWeight: 600 }}>
-                  Assumed Skills Added
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                  {analysisData.whatIfSimulation?.assumedSkillsAdded && analysisData.whatIfSimulation.assumedSkillsAdded.length > 0 ? (
-                    analysisData.whatIfSimulation.assumedSkillsAdded.map((skill, idx) => (
-                      <span 
-                        key={idx}
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.6875rem',
-                          fontWeight: 600,
-                          backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                          color: 'var(--accent-blue, #818cf8)'
-                        }}
-                      >
-                        +{skill}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>None required</span>
-                  )}
-                </div>
-              </div>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
+            Required drive competencies with no verified credit and no practical repository evidence.
+          </p>
 
-              {/* Projected Coverage */}
-              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--accent-emerald, #34d399)', fontWeight: 600 }}>
-                  Projected Skill Coverage
-                </span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-emerald, #34d399)', marginTop: '4px' }}>
-                  {analysisData.whatIfSimulation?.projectedSkillCoverage}%
-                </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {missing.length > 0 ? (
+              missing.map((sk, idx) => {
+                const label = typeof sk === 'string' ? sk : (sk.skill || sk.name || JSON.stringify(sk));
+                return (
+                  <span
+                    key={idx}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#f87171',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    ✕ {label}
+                  </span>
+                );
+              })
+            ) : (
+              <span style={{ fontSize: '0.8125rem', color: '#10b981', fontStyle: 'italic' }}>
+                No prerequisite skills are missing for this drive.
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Priority Missing Skills Callout (if available or non-empty missing) */}
+      {priorityMissing.length > 0 && (
+        <div
+          style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Target size={18} color="#ef4444" />
+            <div>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#f8fafc' }}>
+                Priority Prerequisite Gaps
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                Prerequisites demanding immediate technical focus before recruitment screening:
               </div>
             </div>
-
-            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.5 }}>
-              {analysisData.whatIfSimulation?.explanation}
-            </p>
           </div>
 
-          {/* 10. Disclaimer Banner */}
-          <div 
-            style={{
-              padding: '14px 18px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(15, 23, 42, 0.6)',
-              border: '1px solid var(--border-color, #1e293b)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              textAlign: 'center'
-            }}
-          >
-            <ShieldAlert size={16} color="var(--text-muted, #64748b)" style={{ flexShrink: 0 }} />
-            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', lineHeight: 1.5 }}>
-              {analysisData.disclaimer || 'This readiness analysis is a deterministic prototype recommendation derived from available student profile attributes and placement drive criteria. It does not predict or guarantee hiring outcomes.'}
-            </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {priorityMissing.map((item, idx) => {
+              const label = typeof item === 'string' ? item : (item.skill || item.name || 'Prerequisite');
+              return (
+                <span
+                  key={idx}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    color: '#f87171',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    border: '1px solid rgba(239, 68, 68, 0.3)'
+                  }}
+                >
+                  {label}
+                </span>
+              );
+            })}
           </div>
-
         </div>
       )}
+
+      {/* Actionable Recommendations / Action Plan */}
+      <div
+        style={{
+          backgroundColor: '#0f172a',
+          border: '1px solid #1e293b',
+          borderRadius: '12px',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <TrendingUp size={18} color="#818cf8" />
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>
+            Action Plan for Skill Bridge
+          </h3>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {actions.length > 0 ? (
+            actions.map((act, i) => {
+              const text = typeof act === 'string' ? act : (act.action || act.description || act.title || JSON.stringify(act));
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    fontSize: '0.8125rem',
+                    color: '#cbd5e1',
+                    lineHeight: 1.45
+                  }}
+                >
+                  <ChevronRight size={14} color="#818cf8" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <span>{text}</span>
+                </div>
+              );
+            })
+          ) : (
+            <div
+              style={{
+                padding: '10px 12px',
+                backgroundColor: 'rgba(30, 41, 59, 0.45)',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                fontSize: '0.8125rem',
+                color: '#94a3b8'
+              }}
+            >
+              Candidate demonstrates sufficient preparation alignment for this recruitment drive.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Methodology Footer */}
+      <div
+        style={{
+          padding: '14px 18px',
+          backgroundColor: 'rgba(30, 41, 59, 0.4)',
+          borderRadius: '8px',
+          border: '1px solid rgba(51, 65, 85, 0.4)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '10px',
+          fontSize: '0.75rem',
+          color: '#94a3b8'
+        }}
+      >
+        <ShieldCheck size={16} color="#818cf8" style={{ marginTop: '2px', flexShrink: 0 }} />
+        <div>
+          <strong style={{ color: '#cbd5e1' }}>Explainability &amp; Verification Protocol:</strong> Matched skills are drawn strictly from authoritative student records. Skills evidenced solely in project repositories are classified as Partial and require technical assessment before counting toward formal institutional readiness.
+        </div>
+      </div>
     </div>
   );
 }

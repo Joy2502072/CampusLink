@@ -1,52 +1,71 @@
-/**
- * CampusLink Backend - Skill Gap Analysis Controller
- */
-
-import { analyzeSkillGap } from '../services/skillGap.service.js';
+import * as skillGapService from '../services/skillGap.service.js';
 import { sendResponse } from '../utils/response.js';
 
 /**
  * GET /api/skill-gap/student/:studentId/drive/:driveId
- * Returns deterministic skill-gap analysis, remediation plan, and what-if simulation
+ * Evaluates skill gap analysis between a student's verified profile and a target drive's requirements.
  */
-export const getSkillGapAnalysis = (req, res, next) => {
+export async function getSkillGapAnalysis(req, res, next) {
   try {
     const { studentId, driveId } = req.params;
 
-    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
+    if (!studentId || !studentId.trim()) {
+      return sendResponse(res, 400, false, 'Student ID parameter is required');
     }
 
-    if (!driveId || typeof driveId !== 'string' || !driveId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid placement drive ID parameter provided');
+    if (!driveId || !driveId.trim()) {
+      return sendResponse(res, 400, false, 'Drive ID parameter is required');
     }
 
-    const result = analyzeSkillGap(studentId, driveId);
-
-    if (result.error === 'invalid_student_id') {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
-    }
-
-    if (result.error === 'invalid_drive_id') {
-      return sendResponse(res, 400, false, 'Invalid placement drive ID parameter provided');
-    }
-
-    if (result.error === 'student_not_found') {
-      return sendResponse(res, 404, false, `Student ${studentId.trim().toUpperCase()} not found`);
-    }
-
-    if (result.error === 'drive_not_found') {
-      return sendResponse(res, 404, false, `Placement drive ${driveId.trim().toUpperCase()} not found`);
-    }
+    const analysis = await skillGapService.analyzeSkillGap(
+      studentId.trim(),
+      driveId.trim()
+    );
 
     return sendResponse(
       res,
       200,
       true,
       'Skill gap and improvement recommendation analysis fetched successfully',
-      result
+      analysis
     );
   } catch (error) {
-    next(error);
+    if (error.message && error.message.includes('not found')) {
+      return sendResponse(res, 404, false, error.message);
+    }
+    return next(error);
   }
-};
+}
+
+/**
+ * GET /api/skill-gap/student/:studentId
+ * Optional convenience endpoint to evaluate general student skill requirements against active drives.
+ */
+export async function getStudentGeneralSkillGap(req, res, next) {
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId || !studentId.trim()) {
+      return sendResponse(res, 400, false, 'Student ID parameter is required');
+    }
+
+    // If drives query is omitted, evaluate against the first active drive or return summary
+    const analysis = await skillGapService.analyzeSkillGap(
+      studentId.trim(),
+      req.query.driveId || 'DRV-201'
+    );
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      'General student skill gap evaluation fetched successfully',
+      analysis
+    );
+  } catch (error) {
+    if (error.message && error.message.includes('not found')) {
+      return sendResponse(res, 404, false, error.message);
+    }
+    return next(error);
+  }
+}
