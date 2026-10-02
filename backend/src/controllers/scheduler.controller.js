@@ -1,103 +1,82 @@
-import {
-  detectScheduleConflicts,
-  getDriveConflictDetails,
-  findAlternativeSlots,
-  getSchedulerSummary
-} from '../services/scheduler.service.js';
+import * as schedulerService from '../services/scheduler.service.js';
 import { sendResponse } from '../utils/response.js';
 
 /**
  * GET /api/scheduler/conflicts
- * Retrieve all drives with calculated conflict information
+ * Returns all detected scheduling conflicts.
  */
-export const getAllConflicts = (req, res, next) => {
+export async function getAllConflicts(req, res, next) {
   try {
-    const analysis = detectScheduleConflicts();
-    const data = {
-      totalDrives: analysis.totalDrives,
-      conflictAffectedDrives: analysis.conflictAffectedDrives,
-      conflictFreeDrives: analysis.conflictFreeDrives,
-      conflictPairs: analysis.conflictPairs,
-      criticalConflicts: analysis.criticalConflicts,
-      highConflicts: analysis.highConflicts,
-      mediumConflicts: analysis.mediumConflicts,
-      drives: analysis.drives.map((d) => ({
-        id: d.id,
-        company: d.company,
-        date: d.date,
-        startTime: d.startTime,
-        endTime: d.endTime,
-        venue: d.venue,
-        conflictSeverity: d.conflictSeverity,
-        hasConflict: d.hasConflict,
-        conflictReasons: d.conflictReasons,
-        conflictingDriveIds: d.conflictingDriveIds
-      }))
-    };
+    const conflicts = await schedulerService.detectScheduleConflicts();
+    const criticalConflicts = conflicts.filter((c) => c.severity === 'Critical').length;
+    const highConflicts = conflicts.filter((c) => c.severity === 'High').length;
+    const mediumConflicts = conflicts.filter((c) => c.severity === 'Medium').length;
 
-    return sendResponse(res, 200, true, 'Scheduler conflicts fetched successfully', data);
+    return sendResponse(res, 200, true, 'Scheduling conflicts retrieved successfully', {
+      totalConflicts: conflicts.length,
+      criticalConflicts,
+      highConflicts,
+      mediumConflicts,
+      conflicts
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}
 
 /**
  * GET /api/scheduler/conflicts/:driveId
- * Retrieve detailed conflict information for a single placement drive
+ * Returns conflict details for a specific placement drive.
  */
-export const getConflictByDriveId = (req, res, next) => {
+export async function getConflictByDriveId(req, res, next) {
   try {
     const { driveId } = req.params;
-
-    if (!driveId || typeof driveId !== 'string' || !driveId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid drive ID parameter provided');
+    if (!driveId || !driveId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid drive ID parameter');
     }
 
-    const result = getDriveConflictDetails(driveId);
-
-    if (!result) {
-      return sendResponse(res, 404, false, 'Placement drive not found');
+    const data = await schedulerService.getDriveConflictDetails(driveId.trim());
+    if (!data) {
+      return sendResponse(res, 404, false, `Drive with ID ${driveId} not found`);
     }
 
-    return sendResponse(res, 200, true, 'Drive conflict details fetched successfully', result);
+    return sendResponse(res, 200, true, 'Drive conflict details retrieved successfully', data);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}
 
 /**
  * GET /api/scheduler/alternatives/:driveId
- * Retrieve alternative scheduling options for the selected drive
+ * Returns alternative conflict-free slots for a conflicting placement drive.
  */
-export const getAlternatives = (req, res, next) => {
+export async function getAlternatives(req, res, next) {
   try {
     const { driveId } = req.params;
-
-    if (!driveId || typeof driveId !== 'string' || !driveId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid drive ID parameter provided');
+    if (!driveId || !driveId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid drive ID parameter');
     }
 
-    const alternatives = findAlternativeSlots(driveId);
-
-    if (!alternatives) {
-      return sendResponse(res, 404, false, 'Placement drive not found');
+    const data = await schedulerService.findAlternativeSlots(driveId.trim());
+    if (!data) {
+      return sendResponse(res, 404, false, `Drive with ID ${driveId} not found`);
     }
 
-    return sendResponse(res, 200, true, 'Alternative schedule options fetched successfully', alternatives);
+    return sendResponse(res, 200, true, 'Alternative schedule slots generated successfully', data);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}
 
 /**
  * GET /api/scheduler/summary
- * Retrieve a compact scheduler dashboard summary
+ * Returns global scheduler summary and facility/resource utilization metrics.
  */
-export const getSummary = (req, res, next) => {
+export async function getSummary(req, res, next) {
   try {
-    const summary = getSchedulerSummary();
-    return sendResponse(res, 200, true, 'Scheduler summary fetched successfully', summary);
+    const data = await schedulerService.getSchedulerSummary();
+    return sendResponse(res, 200, true, 'Scheduler summary retrieved successfully', data);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}

@@ -1,262 +1,195 @@
 import React from 'react';
-import { Bell, Clock, Building2, Eye, ShieldCheck, AlertTriangle, Target } from 'lucide-react';
+import { Smartphone, Bell, Clock, Building2, Users, AlertTriangle, ShieldCheck } from 'lucide-react';
 
-export default function NotificationPreview({ previewData = {} }) {
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case 'Urgent':
-        return {
-          badgeBg: 'var(--accent-rose-soft)',
-          badgeColor: 'var(--accent-rose)',
-          badgeBorder: 'rgba(244, 63, 94, 0.4)',
-          indicatorBg: 'var(--accent-rose)'
-        };
-      case 'Important':
-        return {
-          badgeBg: 'var(--accent-amber-soft)',
-          badgeColor: 'var(--accent-amber)',
-          badgeBorder: 'rgba(245, 158, 11, 0.4)',
-          indicatorBg: 'var(--accent-amber)'
-        };
-      default:
-        return {
-          badgeBg: 'var(--accent-blue-soft)',
-          badgeColor: 'var(--accent-blue)',
-          badgeBorder: 'rgba(59, 130, 246, 0.3)',
-          indicatorBg: 'var(--accent-blue)'
-        };
-    }
-  };
+const PRIORITY_BADGES = {
+  Urgent: {
+    color: '#ef4444',
+    bg: 'rgba(239, 68, 68, 0.15)',
+    border: 'rgba(239, 68, 68, 0.3)'
+  },
+  Important: {
+    color: '#f59e0b',
+    bg: 'rgba(245, 158, 11, 0.15)',
+    border: 'rgba(245, 158, 11, 0.3)'
+  },
+  Normal: {
+    color: '#3b82f6',
+    bg: 'rgba(59, 130, 246, 0.15)',
+    border: 'rgba(59, 130, 246, 0.3)'
+  }
+};
 
-  const priority = previewData.priority || 'Normal';
-  const style = getPriorityStyle(priority);
-  const displayTitle = (previewData.title && previewData.title.trim()) || 'Announcement Title Preview';
-  const displayMessage =
-    (previewData.message && previewData.message.trim()) ||
-    'Compose notification content in the editor to preview how this message appears on the student mobile and web portal feeds.';
-  const displayType = previewData.type || 'General Announcement';
-  const displayCompany = previewData.relatedCompany || null;
-  const displayAudience = previewData.targetAudience || 'All Students';
-  const displayBranch = previewData.targetBranch && previewData.targetBranch !== 'All' ? previewData.targetBranch : null;
-  const displayTime = previewData.timestamp || 'Just now (Simulated)';
+export default function NotificationPreview({ previewData }) {
+  const title = (previewData?.title || '').trim() || 'Untitled Announcement';
+  const message = (previewData?.message || '').trim() || 'The notification body text will render here across student portals and mobile notification surfaces.';
+  const type = previewData?.type || 'General Announcement';
+  const priority = previewData?.priority || 'Normal';
+  const audience = previewData?.targetAudience || 'All Students';
+  const branch = previewData?.targetBranch || 'All';
+  const driveId = previewData?.relatedDriveId || null;
+
+  const priorityStyle = PRIORITY_BADGES[priority] || PRIORITY_BADGES.Normal;
 
   return (
     <div
       style={{
-        backgroundColor: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '14px',
-        padding: '22px',
+        backgroundColor: 'var(--bg-card, #0f172a)',
+        border: '1px solid var(--border-color, #1e293b)',
+        borderRadius: '12px',
+        padding: '24px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: '20px',
+        boxSizing: 'border-box'
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Eye size={16} color="var(--accent-blue)" aria-hidden="true" />
-          <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#ffffff' }}>
-            Student Notification Preview
-          </h3>
+          <Smartphone size={18} color="var(--accent-blue, #6366f1)" />
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.01em' }}>
+            Preview
+          </h2>
         </div>
+
         <span
           style={{
-            fontSize: '0.68rem',
-            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
             padding: '2px 8px',
-            borderRadius: '4px',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border-color)',
-            letterSpacing: '0.04em'
+            borderRadius: '6px',
+            fontSize: '10px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            backgroundColor: 'rgba(99, 102, 241, 0.12)',
+            color: '#818cf8',
+            border: '1px solid rgba(99, 102, 241, 0.25)'
           }}
         >
-          DEMO PREVIEW
+          STUDENT PREVIEW
         </span>
       </div>
 
-      {/* Simulated Student Portal Card */}
+      {/* Simulated Device Surface */}
       <div
         style={{
-          backgroundColor: '#0b1120',
-          border: `1px solid ${style.badgeBorder}`,
-          borderRadius: '12px',
-          padding: '18px 16px',
+          backgroundColor: '#020617',
+          border: '1px solid rgba(51, 65, 85, 0.6)',
+          borderRadius: '10px',
+          padding: '16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px',
-          position: 'relative',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.35)'
+          gap: '12px'
         }}
       >
-        {/* Top Priority Accent Strip */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            backgroundColor: style.indicatorBg,
-            borderTopLeftRadius: '12px',
-            borderTopRightRadius: '12px'
-          }}
-        />
-
-        {/* Card Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                backgroundColor: style.badgeBg,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: style.badgeColor,
-                flexShrink: 0
-              }}
-            >
-              <Bell size={16} aria-hidden="true" />
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}
-              >
-                {displayType}
-              </div>
-              <div
-                style={{
-                  fontSize: '0.92rem',
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  lineHeight: 1.3
-                }}
-              >
-                {displayTitle}
-              </div>
-            </div>
-          </div>
-
-          <span
-            style={{
-              fontSize: '0.66rem',
-              fontWeight: 700,
-              padding: '2px 8px',
-              borderRadius: '4px',
-              backgroundColor: style.badgeBg,
-              color: style.badgeColor,
-              border: `1px solid ${style.badgeBorder}`,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {priority} Priority
+        {/* Device Status Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.6875rem', color: '#64748b' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Bell size={11} color="#94a3b8" /> CampusLink Portal
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Clock size={11} /> Just Now
           </span>
         </div>
 
-        {/* Message Body */}
-        <p
+        {/* Card Body */}
+        <div
           style={{
-            fontSize: '0.8rem',
-            color: 'var(--text-secondary)',
-            lineHeight: 1.55,
-            whiteSpace: 'pre-wrap'
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+            border: `1px solid ${priorityStyle.border}`,
+            borderRadius: '8px',
+            padding: '14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
           }}
         >
-          {displayMessage}
-        </p>
-
-        {/* Metadata Badges: Target Audience & Related Company */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '2px' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              fontSize: '0.7rem',
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <Target size={12} color="var(--accent-blue)" aria-hidden="true" />
-            <span>
-              Target: <strong style={{ color: 'var(--text-primary)' }}>{displayAudience}</strong>
-              {displayBranch ? ` (${displayBranch})` : ''}
+          {/* Metadata Row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {type}
             </span>
-          </div>
 
-          {displayCompany && (
-            <div
+            <span
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                padding: '3px 8px',
-                fontSize: '0.7rem',
-                color: 'var(--text-secondary)'
+                gap: '3px',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: '10px',
+                fontWeight: 700,
+                backgroundColor: priorityStyle.bg,
+                color: priorityStyle.color,
+                border: `1px solid ${priorityStyle.border}`
               }}
             >
-              <Building2 size={12} color="var(--accent-emerald)" aria-hidden="true" />
-              <span>
-                Drive: <strong style={{ color: 'var(--text-primary)' }}>{displayCompany}</strong>
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Card Footer */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-            paddingTop: '10px',
-            fontSize: '0.68rem',
-            color: 'var(--text-muted)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Clock size={12} aria-hidden="true" />
-            <span>{displayTime}</span>
+              {priority === 'Urgent' && <AlertTriangle size={10} />}
+              {priority} Priority
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)' }}>
-            <ShieldCheck size={13} aria-hidden="true" />
-            <span>CampusLink Verified Notice</span>
+
+          {/* Title */}
+          <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.35 }}>
+            {title}
+          </h3>
+
+          {/* Message Body */}
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: '#cbd5e1', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+            {message}
+          </p>
+
+          {/* Drive & Scope Badges */}
+          <div
+            style={{
+              paddingTop: '8px',
+              borderTop: '1px solid rgba(51, 65, 85, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '6px',
+              fontSize: '0.6875rem',
+              color: '#94a3b8'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Users size={11} /> Audience: <strong style={{ color: '#e2e8f0' }}>{audience}</strong>
+            </span>
+
+            {branch && branch !== 'All' && (
+              <span style={{ color: '#cbd5e1' }}>
+                Branch: <strong>{branch}</strong>
+              </span>
+            )}
+
+            {driveId && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Building2 size={11} /> Drive: <strong>{driveId}</strong>
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Simulated Sandbox Transparency Banner */}
+      {/* Dispatch Verification Footer */}
       <div
         style={{
-          fontSize: '0.7rem',
-          color: 'var(--text-muted)',
-          backgroundColor: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid var(--border-color)',
+          padding: '10px 14px',
+          backgroundColor: 'rgba(30, 41, 59, 0.4)',
           borderRadius: '8px',
-          padding: '8px 12px',
+          border: '1px solid rgba(51, 65, 85, 0.4)',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          gap: '8px',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted, #94a3b8)'
         }}
       >
-        <AlertTriangle size={13} color="var(--accent-amber)" aria-hidden="true" style={{ flexShrink: 0 }} />
-        <span>Simulated Student View: Notifications are rendered locally and are not transmitted externally.</span>
+        <ShieldCheck size={14} color="#10b981" />
+        <span>CampusLink Placement Cell • Live Database</span>
       </div>
     </div>
   );

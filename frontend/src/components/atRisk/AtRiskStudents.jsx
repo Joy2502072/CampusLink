@@ -1,137 +1,346 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import RiskSummaryCards from './RiskSummaryCards';
 import RiskDistribution from './RiskDistribution';
 import RiskStudentTable from './RiskStudentTable';
 import StudentRiskDetails from './StudentRiskDetails';
-import { atRiskStudentsData } from '../../data/mockPlacementData';
 import { Info, Sparkles, Download } from 'lucide-react';
 
 export default function AtRiskStudents() {
+
+  const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+
+  // Fetch backend at-risk students
+  useEffect(() => {
+
+    const fetchAtRiskStudents = async () => {
+
+      try {
+
+        const response = await fetch(
+          "http://localhost:5000/api/readiness/at-risk",
+          {
+            method: "GET",
+            headers: {
+              "X-Demo-User-Role": "placement_officer"
+            }
+          }
+        );
+
+
+        const result = await response.json();
+
+
+        if (result.success) {
+          setStudents(result.data.students);
+        }
+        else {
+          console.error(result.message);
+        }
+
+
+      } catch (error) {
+
+        console.error(
+          "Error fetching at-risk students:",
+          error
+        );
+
+      } finally {
+
+        setLoading(false);
+
+      }
+
+    };
+
+
+    fetchAtRiskStudents();
+
+  }, []);
+
+
 
   const showToast = (msg) => {
+
     setToastMessage(msg);
+
     setTimeout(() => {
       setToastMessage(null);
     }, 4000);
+
   };
 
+
+
+  if (loading) {
+
+    return (
+      <div
+        style={{
+          color:"#ffffff",
+          padding:"30px",
+          fontSize:"18px"
+        }}
+      >
+        Loading at-risk students...
+      </div>
+    );
+
+  }
+
+
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+
+    <div
+      style={{
+        display:'flex',
+        flexDirection:'column',
+        gap:'22px'
+      }}
+    >
+
+
+      {/* Toast */}
       {toastMessage && (
+
         <div
           role="status"
-          aria-live="polite"
           style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            backgroundColor: '#1e293b',
-            border: '1px solid var(--accent-blue)',
-            color: '#f8fafc',
-            padding: '12px 18px',
-            borderRadius: '8px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-            fontSize: '0.82rem',
-            zIndex: 70
+            position:'fixed',
+            bottom:'24px',
+            right:'24px',
+            backgroundColor:'#1e293b',
+            border:'1px solid var(--accent-blue)',
+            color:'#fff',
+            padding:'12px 18px',
+            borderRadius:'8px',
+            zIndex:70
           }}
         >
+
           {toastMessage}
+
         </div>
+
       )}
 
-      <div style={{
-        backgroundColor: 'rgba(59, 130, 246, 0.08)',
-        border: '1px solid rgba(59, 130, 246, 0.25)',
-        borderRadius: '10px',
-        padding: '10px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }}>
-        <Info size={16} color="var(--accent-blue)" style={{ flexShrink: 0 }} aria-hidden="true" />
-        <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-          <strong style={{ color: '#ffffff' }}>DEMO / SYNTHETIC DATA:</strong> Risk scoring shown uses an explainable deterministic prototype model based on synthetic readiness indicators. Not real student data or trained ML inferences.
+
+
+
+
+      {/* Info Banner */}
+
+      <div
+        style={{
+          backgroundColor:'rgba(59,130,246,0.08)',
+          border:'1px solid rgba(59,130,246,0.25)',
+          borderRadius:'10px',
+          padding:'10px 16px',
+          display:'flex',
+          alignItems:'center',
+          gap:'10px'
+        }}
+      >
+
+        <Info 
+          size={16}
+          color="var(--accent-blue)"
+        />
+
+        <p
+          style={{
+            fontSize:'0.76rem',
+            color:'var(--text-secondary)'
+          }}
+        >
+
+          <strong style={{color:'#fff'}}>
+            Explainable readiness-based placement risk analysis.
+          </strong>
+
         </p>
+
+
       </div>
 
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '14px'
-      }}>
+
+
+
+
+      {/* Header */}
+
+      <div
+        style={{
+          display:'flex',
+          justifyContent:'space-between',
+          alignItems:'center',
+          flexWrap:'wrap'
+        }}
+      >
+
         <div>
-          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
+
+          <h2
+            style={{
+              fontSize:'1.45rem',
+              fontWeight:800,
+              color:'#fff'
+            }}
+          >
+
             At-Risk Student Monitoring
+
           </h2>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Identify students who may need early placement intervention based on transparent readiness indicators.
+
+
+          <p
+            style={{
+              color:'var(--text-secondary)',
+              fontSize:'0.82rem'
+            }}
+          >
+
+            Identify students requiring placement intervention.
+
           </p>
+
+
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => showToast("Demo control: At-Risk cohort report exported to simulated PDF/CSV.")}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '0.78rem',
-              fontWeight: 600
-            }}
-          >
-            <Download size={14} aria-hidden="true" />
-            Export Intervention List (Demo)
-          </button>
+
+
+
+
+        <div
+          style={{
+            display:'flex',
+            gap:'10px'
+          }}
+        >
+
 
           <button
-            type="button"
-            onClick={() => showToast("Demo control: Batch mentor allocation trigger will integrate with Communication Hub in Phase 4.")}
+            onClick={() =>
+              showToast(
+                "Demo control: Report exported successfully"
+              )
+            }
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-              color: '#ffffff',
-              padding: '8px 14px',
-              borderRadius: '8px',
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)'
+              display:'flex',
+              alignItems:'center',
+              gap:'6px',
+              padding:'8px 12px',
+              borderRadius:'8px',
+              background:'var(--bg-card)',
+              color:'#fff'
             }}
           >
-            <Sparkles size={14} aria-hidden="true" />
-            Trigger Batch Intervention (Demo)
+
+            <Download size={14}/>
+            Export List
+
           </button>
+
+
+
+
+
+          <button
+            onClick={() =>
+              showToast(
+                "Batch intervention triggered"
+              )
+            }
+            style={{
+              display:'flex',
+              alignItems:'center',
+              gap:'6px',
+              padding:'8px 14px',
+              borderRadius:'8px',
+              background:'#2563eb',
+              color:'#fff'
+            }}
+          >
+
+            <Sparkles size={14}/>
+            Trigger Intervention
+
+          </button>
+
+
         </div>
+
+
       </div>
 
-      <RiskSummaryCards students={atRiskStudentsData} />
-      <RiskDistribution students={atRiskStudentsData} />
-      <RiskStudentTable
-        students={atRiskStudentsData}
-        onSelectStudent={(student) => setSelectedStudent(student)}
+
+
+
+
+
+      {/* Components with Backend Data */}
+
+
+      <RiskSummaryCards
+        students={students}
       />
 
-      {selectedStudent && (
+
+
+      <RiskDistribution
+        students={students}
+      />
+
+
+
+      <RiskStudentTable
+
+        students={students}
+
+        onSelectStudent={(student)=>
+          setSelectedStudent(student)
+        }
+
+      />
+
+
+
+
+
+
+      {
+        selectedStudent &&
+
         <StudentRiskDetails
+
           student={selectedStudent}
-          onClose={() => setSelectedStudent(null)}
-          onActionTrigger={(msg) => {
+
+          onClose={() =>
+            setSelectedStudent(null)
+          }
+
+
+          onActionTrigger={(msg)=>{
+
             showToast(msg);
+
             setSelectedStudent(null);
+
           }}
+
         />
-      )}
+
+      }
+
+
+
     </div>
+
   );
+
 }

@@ -448,7 +448,7 @@ export default function NotificationComposer({
             }}
           >
             <Eye size={14} aria-hidden="true" />
-            Preview (Demo)
+            Preview
           </button>
         )}
 
@@ -469,7 +469,7 @@ export default function NotificationComposer({
           }}
         >
           <Save size={14} aria-hidden="true" />
-          Save Draft (Demo)
+          Save Draft
         </button>
 
         <button
@@ -489,7 +489,7 @@ export default function NotificationComposer({
           }}
         >
           <Clock size={14} aria-hidden="true" />
-          Schedule (Demo)
+          Schedule
         </button>
 
         <button
@@ -509,7 +509,7 @@ export default function NotificationComposer({
           }}
         >
           <Send size={14} aria-hidden="true" />
-          Send Now (Demo)
+          Send Now
         </button>
       </div>
     </div>

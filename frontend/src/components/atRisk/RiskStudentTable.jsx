@@ -1,251 +1,425 @@
-import React, { useState } from 'react';
-import { ArrowUpDown, ChevronRight, Filter } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Search, SlidersHorizontal } from 'lucide-react';
 
-export default function RiskStudentTable({ students, onSelectStudent }) {
-  const [filterLevel, setFilterLevel] = useState('All');
-  const [filterBranch, setFilterBranch] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('riskScore');
-  const [sortOrder, setSortOrder] = useState('desc');
+export default function RiskStudentTable({
+  students = [],
+  onSelectStudent
+}) {
+  const [riskFilter, setRiskFilter] = useState('All');
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortDirection, setSortDirection] = useState('desc');
 
-  const branches = ['All', 'CSE', 'IT', 'ECE', 'EE', 'MECH', 'CIVIL'];
-  const levels = ['All', 'High', 'Medium', 'Low'];
+  const branches = [
+    'All',
+    ...new Set(students.map((student) => student.branch).filter(Boolean))
+  ];
 
-  const filtered = students.filter((s) => {
-    const matchLevel = filterLevel === 'All' || s.riskLevel === filterLevel;
-    const matchBranch = filterBranch === 'All' || s.branch === filterBranch;
-    const query = searchQuery.trim().toLowerCase();
-    const matchSearch =
-      query === '' ||
-      s.studentId.toLowerCase().includes(query) ||
-      s.name.toLowerCase().includes(query) ||
-      s.branch.toLowerCase().includes(query);
+  const filteredStudents = useMemo(() => {
+    const filtered = students.filter((student) => {
+      const matchesRisk =
+        riskFilter === 'All' ||
+        student.riskLevel === `${riskFilter} Risk`;
 
-    return matchLevel && matchBranch && matchSearch;
-  });
+      const matchesBranch =
+        branchFilter === 'All' ||
+        student.branch === branchFilter;
 
-  const sorted = [...filtered].sort((a, b) => {
-    let aVal = a[sortField];
-    let bVal = b[sortField];
+      const search = searchTerm.toLowerCase().trim();
 
-    if (sortOrder === 'asc') {
-      return aVal > bVal ? 1 : -1;
-    } else {
-      return aVal < bVal ? 1 : -1;
+      const matchesSearch =
+        !search ||
+        student.name?.toLowerCase().includes(search) ||
+        student.id?.toLowerCase().includes(search);
+
+      return matchesRisk && matchesBranch && matchesSearch;
+    });
+
+    return [...filtered].sort((a, b) => {
+      const scoreA = Number(a.readinessScore ?? 0);
+      const scoreB = Number(b.readinessScore ?? 0);
+
+      return sortDirection === 'desc'
+        ? scoreB - scoreA
+        : scoreA - scoreB;
+    });
+  }, [
+    students,
+    riskFilter,
+    branchFilter,
+    searchTerm,
+    sortDirection
+  ]);
+
+  const getRiskStyle = (riskLevel) => {
+    if (riskLevel === 'High Risk') {
+      return {
+        backgroundColor: 'rgba(239,68,68,0.12)',
+        border: '1px solid rgba(239,68,68,0.35)',
+        color: '#f87171'
+      };
     }
-  });
 
-  const toggleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
+    if (riskLevel === 'Medium Risk') {
+      return {
+        backgroundColor: 'rgba(245,158,11,0.12)',
+        border: '1px solid rgba(245,158,11,0.35)',
+        color: '#fbbf24'
+      };
     }
-  };
 
-  const getRiskBadge = (level) => {
-    switch (level) {
-      case 'High':
-        return { bg: 'var(--accent-rose-soft)', text: 'var(--accent-rose)', border: 'rgba(244, 63, 94, 0.3)' };
-      case 'Medium':
-        return { bg: 'var(--accent-amber-soft)', text: 'var(--accent-amber)', border: 'rgba(245, 158, 11, 0.3)' };
-      default:
-        return { bg: 'var(--accent-emerald-soft)', text: 'var(--accent-emerald)', border: 'rgba(16, 185, 129, 0.3)' };
-    }
+    return {
+      backgroundColor: 'rgba(16,185,129,0.12)',
+      border: '1px solid rgba(16,185,129,0.35)',
+      color: '#34d399'
+    };
   };
 
   return (
-    <div style={{
-      backgroundColor: 'var(--bg-card)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '14px',
-      padding: '22px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px'
-    }}>
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            <Filter size={14} aria-hidden="true" />
-            <span>Risk Level:</span>
-          </div>
-          {levels.map((lvl) => (
-            <button
-              key={lvl}
-              type="button"
-              onClick={() => setFilterLevel(lvl)}
-              style={{
-                fontSize: '0.74rem',
-                padding: '5px 10px',
-                borderRadius: '6px',
-                fontWeight: 600,
-                backgroundColor: filterLevel === lvl ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.05)',
-                color: filterLevel === lvl ? '#ffffff' : 'var(--text-secondary)',
-                border: '1px solid var(--border-color)'
-              }}
-            >
-              {lvl}
-            </button>
-          ))}
+    <div
+      style={{
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '12px',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Filters */}
+      <div
+        style={{
+          padding: '16px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          flexWrap: 'wrap',
+          borderBottom: '1px solid var(--border-color)'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: 'var(--text-secondary)',
+            fontSize: '0.75rem'
+          }}
+        >
+          <SlidersHorizontal size={14} />
+          Risk Level:
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <select
-            aria-label="Filter by Branch"
-            value={filterBranch}
-            onChange={(e) => setFilterBranch(e.target.value)}
+        {['All', 'High', 'Medium', 'Low'].map((risk) => (
+          <button
+            key={risk}
+            type="button"
+            onClick={() => setRiskFilter(risk)}
             style={{
-              backgroundColor: 'rgba(15, 23, 42, 0.6)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
+              padding: '6px 11px',
               borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '0.76rem',
-              outline: 'none'
+              border: '1px solid var(--border-color)',
+              backgroundColor:
+                riskFilter === risk
+                  ? '#3b82f6'
+                  : 'rgba(255,255,255,0.03)',
+              color: '#ffffff',
+              fontSize: '0.72rem',
+              cursor: 'pointer'
             }}
           >
-            {branches.map(b => (
-              <option key={b} value={b} style={{ backgroundColor: '#1e293b' }}>
-                Branch: {b}
-              </option>
-            ))}
-          </select>
+            {risk}
+          </button>
+        ))}
+
+        {/* Branch */}
+        <select
+          value={branchFilter}
+          onChange={(e) => setBranchFilter(e.target.value)}
+          style={{
+            marginLeft: 'auto',
+            backgroundColor: '#182338',
+            border: '1px solid var(--border-color)',
+            color: '#ffffff',
+            padding: '7px 10px',
+            borderRadius: '6px',
+            fontSize: '0.72rem'
+          }}
+        >
+          {branches.map((branch) => (
+            <option key={branch} value={branch}>
+              {branch === 'All' ? 'Branch: All' : `Branch: ${branch}`}
+            </option>
+          ))}
+        </select>
+
+        {/* Search */}
+        <div
+          style={{
+            position: 'relative'
+          }}
+        >
+          <Search
+            size={14}
+            style={{
+              position: 'absolute',
+              left: '9px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#64748b'
+            }}
+          />
 
           <input
-            type="search"
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search student ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search student by ID, name, or branch"
             style={{
-              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              width: '145px',
+              backgroundColor: '#182338',
               border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
+              color: '#ffffff',
+              padding: '7px 10px 7px 30px',
               borderRadius: '6px',
-              padding: '6px 12px',
-              fontSize: '0.76rem',
+              fontSize: '0.72rem',
               outline: 'none'
             }}
           />
         </div>
       </div>
 
+      {/* Table */}
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            minWidth: '900px'
+          }}
+        >
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-color)', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '12px 10px' }}>Student</th>
-              <th style={{ padding: '12px 10px' }}>Branch</th>
-              <th style={{ padding: '12px 10px', cursor: 'pointer' }} onClick={() => toggleSort('cgpa')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  CGPA <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th style={{ padding: '12px 10px', cursor: 'pointer' }} onClick={() => toggleSort('readinessScore')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  Readiness <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th style={{ padding: '12px 10px' }}>Mock Interview</th>
-              <th style={{ padding: '12px 10px', cursor: 'pointer' }} onClick={() => toggleSort('applications')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  Applications <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th style={{ padding: '12px 10px' }}>Shortlisted</th>
-              <th style={{ padding: '12px 10px', cursor: 'pointer' }} onClick={() => toggleSort('riskScore')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-blue)' }}>
-                  Risk Score <ArrowUpDown size={12} />
-                </div>
-              </th>
-              <th style={{ padding: '12px 10px' }}>Risk Band</th>
-              <th style={{ padding: '12px 10px', textAlign: 'right' }}>Action</th>
+            <tr>
+              {[
+                'STUDENT',
+                'BRANCH',
+                'CGPA',
+                'READINESS',
+                'APPLICATIONS',
+                'REJECTIONS',
+                'RISK SCORE',
+                'RISK BAND',
+                'ACTION'
+              ].map((heading, index) => (
+                <th
+                  key={heading}
+                  style={{
+                    textAlign: index === 0 ? 'left' : 'left',
+                    padding: '12px 10px',
+                    color: '#64748b',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--border-color)',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {heading}
+
+                  {heading === 'READINESS' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSortDirection(
+                          sortDirection === 'desc'
+                            ? 'asc'
+                            : 'desc'
+                        )
+                      }
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#3b82f6',
+                        cursor: 'pointer',
+                        padding: 0,
+                        marginLeft: '4px'
+                      }}
+                    >
+                      {sortDirection === 'desc' ? (
+                        <ChevronDown size={12} />
+                      ) : (
+                        <ChevronUp size={12} />
+                      )}
+                    </button>
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
+
           <tbody>
-            {sorted.length === 0 ? (
+            {filteredStudents.length === 0 ? (
               <tr>
-                <td colSpan="10" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                  No synthetic student records match the active filter criteria.
+                <td
+                  colSpan="9"
+                  style={{
+                    padding: '30px',
+                    textAlign: 'center',
+                    color: '#64748b'
+                  }}
+                >
+                  No students found.
                 </td>
               </tr>
             ) : (
-              sorted.map((s) => {
-                const badge = getRiskBadge(s.riskLevel);
+              filteredStudents.map((student) => {
+                const riskStyle = getRiskStyle(student.riskLevel);
+
                 return (
                   <tr
-                    key={s.studentId}
+                    key={student.id}
                     style={{
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                      fontSize: '0.8rem',
-                      transition: 'background-color 0.15s ease'
+                      borderBottom:
+                        '1px solid rgba(148,163,184,0.08)'
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    <td style={{ padding: '12px 10px', fontWeight: 600, color: '#ffffff' }}>
-                      {s.name}
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{s.studentId}</div>
-                    </td>
-                    <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{s.branch}</td>
-                    <td style={{ padding: '12px 10px', color: 'var(--text-secondary)', fontWeight: 600 }}>{s.cgpa}</td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{ color: s.readinessScore < 60 ? 'var(--accent-rose)' : 'var(--text-primary)', fontWeight: 600 }}>
-                        {s.readinessScore}%
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{ color: s.mockInterviewScore < 60 ? 'var(--accent-amber)' : 'var(--text-primary)', fontWeight: 600 }}>
-                        {s.mockInterviewScore}%
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{s.applications}</td>
-                    <td style={{ padding: '12px 10px', color: 'var(--text-secondary)' }}>{s.shortlisted}</td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{ fontWeight: 800, color: badge.text }}>
-                        {s.riskScore}
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>/100</span>
-                    </td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        backgroundColor: badge.bg,
-                        color: badge.text,
-                        border: `1px solid ${badge.border}`
-                      }}>
-                        {s.riskLevel}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px', textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectStudent(s)}
-                        aria-label={`View risk details for ${s.studentId}`}
+                    {/* Student */}
+                    <td
+                      style={{
+                        padding: '13px 10px'
+                      }}
+                    >
+                      <div
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                          color: 'var(--accent-blue)',
-                          padding: '5px 10px',
-                          borderRadius: '6px',
-                          fontSize: '0.74rem',
-                          fontWeight: 600
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '0.76rem'
                         }}
                       >
-                        View Details <ChevronRight size={13} aria-hidden="true" />
+                        {student.name}
+                      </div>
+
+                      <div
+                        style={{
+                          color: '#64748b',
+                          fontSize: '0.64rem',
+                          marginTop: '3px'
+                        }}
+                      >
+                        {student.id}
+                      </div>
+                    </td>
+
+                    {/* Branch */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#94a3b8',
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.branch || '-'}
+                    </td>
+
+                    {/* CGPA */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#ffffff',
+                        fontWeight: 600,
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.cgpa ?? '-'}
+                    </td>
+
+                    {/* Readiness */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.readinessScore ?? 0}%
+                    </td>
+
+                    {/* Applications */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#94a3b8',
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.rawMetrics?.applicationsCount ?? '-'}
+                    </td>
+
+                    {/* Rejections */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#94a3b8',
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.rawMetrics?.rejectionsCount ?? '-'}
+                    </td>
+
+                    {/* Risk Score */}
+                    <td
+                      style={{
+                        padding: '13px 10px',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '0.72rem'
+                      }}
+                    >
+                      {student.readinessScore ?? 0}/100
+                    </td>
+
+                    {/* Risk Level */}
+                    <td
+                      style={{
+                        padding: '13px 10px'
+                      }}
+                    >
+                      <span
+                        style={{
+                          ...riskStyle,
+                          display: 'inline-block',
+                          padding: '4px 8px',
+                          borderRadius: '5px',
+                          fontSize: '0.62rem',
+                          fontWeight: 700
+                        }}
+                      >
+                        {student.riskLevel || 'Unknown'}
+                      </span>
+                    </td>
+
+                    {/* Action */}
+                    <td
+                      style={{
+                        padding: '13px 10px'
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSelectStudent?.(student)
+                        }
+                        style={{
+                          backgroundColor:
+                            'rgba(37,99,235,0.18)',
+                          border: 'none',
+                          color: '#60a5fa',
+                          padding: '6px 10px',
+                          borderRadius: '5px',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        View Details →
                       </button>
                     </td>
                   </tr>
@@ -256,19 +430,25 @@ export default function RiskStudentTable({ students, onSelectStudent }) {
         </table>
       </div>
 
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '0.72rem',
-        color: 'var(--text-muted)',
-        borderTop: '1px solid var(--border-color)',
-        paddingTop: '12px',
-        flexWrap: 'wrap',
-        gap: '8px'
-      }}>
-        <span>Showing {sorted.length} of {students.length} monitored students</span>
-        <span>Sorting by: <strong style={{ color: 'var(--text-secondary)' }}>{sortField}</strong> ({sortOrder.toUpperCase()})</span>
+      {/* Footer */}
+      <div
+        style={{
+          padding: '11px 18px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          color: '#64748b',
+          fontSize: '0.68rem'
+        }}
+      >
+        <span>
+          Showing {filteredStudents.length} of {students.length}{' '}
+          monitored students
+        </span>
+
+        <span>
+          Sorting by: readinessScore (
+          {sortDirection === 'desc' ? 'DESC' : 'ASC'})
+        </span>
       </div>
     </div>
   );

@@ -1,422 +1,370 @@
-/**
- * CampusLink Backend - Scheduler & Conflict Management Service
- * 
- * NOTICE:
- * This service implements deterministic conflict detection and alternative slot
- * recommendations using the synthetic placement drive schedule dataset.
- * It detects venue collisions (Critical), resource overlaps (High), and branch
- * interview scheduling conflicts (Medium).
- */
-
-import { drives } from '../data/driveData.js';
-
-export const campusVenues = [
-  "Seminar Hall A",
-  "Seminar Hall B",
-  "Auditorium 1",
-  "Computer Lab 1",
-  "Computer Lab 2",
-  "Placement Interview Suite"
-];
-
-export const standardTimeSlots = [
-  { startTime: "09:00", endTime: "11:30" },
-  { startTime: "11:30", endTime: "14:00" },
-  { startTime: "14:30", endTime: "17:00" },
-  { startTime: "17:30", endTime: "20:00" }
-];
-
-const SEVERITY_WEIGHT = {
-  "Critical": 4,
-  "High": 3,
-  "Medium": 2,
-  "No Conflict": 1
-};
+import * as schedulerRepository from '../repositories/scheduler.repository.js';
+import * as driveRepository from '../repositories/drive.repository.js';
 
 /**
- * Converts a "HH:MM" string to minutes from midnight
+ * Converts a "HH:mm" time string into minutes since midnight.
  */
-export const timeToMinutes = (timeStr) => {
+function timeToMinutes(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return 0;
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return (hours || 0) * 60 + (minutes || 0);
-};
+  const parts = timeStr.trim().split(':');
+  const hours = parseInt(parts[0], 10) || 0;
+  const minutes = parseInt(parts[1], 10) || 0;
+  return hours * 60 + minutes;
+}
 
 /**
- * Evaluates whether two intervals overlap: max(startA, startB) < min(endA, endB)
+ * Checks if two time intervals overlap strictly:
+ * [startA, endA] and [startB, endB] overlap if startA < endB and endA > startB.
  */
-export const doTimesOverlap = (startA, endA, startB, endB) => {
-  const aStart = timeToMinutes(startA);
-  const aEnd = timeToMinutes(endA);
-  const bStart = timeToMinutes(startB);
-  const bEnd = timeToMinutes(endB);
+function isTimeOverlapping(startA, endA, startB, endB) {
+  const minStartA = timeToMinutes(startA);
+  const minEndA = timeToMinutes(endA);
+  const minStartB = timeToMinutes(startB);
+  const minEndB = timeToMinutes(endB);
 
-  return Math.max(aStart, bStart) < Math.min(aEnd, bEnd);
-};
+  return minStartA < minEndB && minEndA > minStartB;
+}
 
 /**
- * Evaluates the specific conflict between two drives on the same date and overlapping times.
- * Returns null if no conflict, or an object containing overall severity, specific reason types,
- * and detailed conflict messages.
+ * Compiles the active working schedule pool.
+ * Combines explicit MySQL `drive_schedules` records with in-memory drive-level
+ * fallback schedules for drives lacking explicit schedule records.
+ * Does NOT insert fallback records automatically into MySQL.
  */
-export const getConflictDetails = (driveA, driveB) => {
-  if (driveA.id === driveB.id) return null;
-  if (driveA.date !== driveB.date) return null;
+async function getEffectiveSchedules() {
+  const [dbSchedules, allDrives] = await Promise.all([
+    schedulerRepository.findAllSchedules(),
+    driveRepository.findAllDrives()
+  ]);
 
-  if (!doTimesOverlap(driveA.startTime, driveA.endTime, driveB.startTime, driveB.endTime)) {
-    return null;
-  }
+  const scheduledDriveIds = new Set(dbSchedules.map((s) => s.driveId));
+  const effective = [...dbSchedules];
 
-  const reasons = [];
-  let isVenueConflict = false;
-  let isResourceConflict = false;
-  let isBranchConflict = false;
-
-  // 1. Venue Double-Booking (Critical)
-  if (driveA.venue.trim().toLowerCase() === driveB.venue.trim().toLowerCase()) {
-    isVenueConflict = true;
-    reasons.push({
-      type: "Venue",
-      severity: "Critical",
-      message: `Venue is double-booked with ${driveB.id} (${driveB.company}) at ${driveA.venue}.`
-    });
-  }
-
-  // 2. Resource Collision (High)
-  const resA = driveA.requiredResources || [];
-  const resB = driveB.requiredResources || [];
-  const sharedResources = resA.filter((r) =>
-    resB.some((otherR) => otherR.trim().toLowerCase() === r.trim().toLowerCase())
-  );
-
-  if (sharedResources.length > 0) {
-    isResourceConflict = true;
-    reasons.push({
-      type: "Resource",
-      severity: "High",
-      message: `Shared resource [${sharedResources.join(', ')}] requested concurrently with ${driveB.id} (${driveB.company}).`
-    });
-  }
-
-  // 3. Branch Overlap (Medium)
-  const branchesA = driveA.eligibleBranches || [];
-  const branchesB = driveB.eligibleBranches || [];
-  const sharedBranches = branchesA.filter((b) =>
-    branchesB.some((otherB) => otherB.trim().toUpperCase() === b.trim().toUpperCase())
-  );
-
-  if (sharedBranches.length > 0) {
-    isBranchConflict = true;
-    reasons.push({
-      type: "Branch",
-      severity: "Medium",
-      message: `Eligible students in [${sharedBranches.join(', ')}] have overlapping sessions with ${driveB.id} (${driveB.company}).`
-    });
-  }
-
-  if (reasons.length === 0) {
-    return null;
-  }
-
-  let severity = "Medium";
-  if (isVenueConflict) {
-    severity = "Critical";
-  } else if (isResourceConflict) {
-    severity = "High";
-  }
-
-  return {
-    severity,
-    reasons,
-    isVenueConflict,
-    isResourceConflict,
-    isBranchConflict
-  };
-};
-
-/**
- * Computes all unique pair conflicts and aggregates conflict metrics across the drive schedule.
- */
-export const getConflictAnalysis = (allDrives = drives) => {
-  const pairConflictMap = new Map();
-  const driveConflictMap = new Map();
-
-  allDrives.forEach((d) => {
-    driveConflictMap.set(d.id, {
-      reasons: [],
-      conflictingDriveIds: new Set(),
-      highestSeverity: "No Conflict"
-    });
+  // For drives without explicit schedule records, derive a virtual schedule from placement_drives
+  allDrives.forEach((drive) => {
+    if (!scheduledDriveIds.has(drive.id) && drive.date) {
+      effective.push({
+        id: `TEMP-SCH-${drive.id}`,
+        driveId: drive.id,
+        roundName: 'Recruitment Drive',
+        roundNumber: 1,
+        date: drive.date,
+        startTime: drive.startTime || '09:30',
+        endTime: drive.endTime || '17:00',
+        venue: drive.venue || 'Campus Center',
+        assignedResources: drive.requiredResources || [],
+        status: drive.status || 'Scheduled',
+        company: drive.company,
+        role: drive.role,
+        packageLPA: drive.packageLPA,
+        eligibleBranches: drive.eligibleBranches || [],
+        driveStatus: drive.status || ''
+      });
+    }
   });
 
-  for (let i = 0; i < allDrives.length; i++) {
-    for (let j = i + 1; j < allDrives.length; j++) {
-      const driveA = allDrives[i];
-      const driveB = allDrives[j];
+  return { effectiveSchedules: effective, allDrives };
+}
 
-      const conflict = getConflictDetails(driveA, driveB);
-      if (conflict) {
-        const pairKey = [driveA.id, driveB.id].sort().join(':::');
-        pairConflictMap.set(pairKey, {
-          driveAId: driveA.id,
-          driveBId: driveB.id,
-          severity: conflict.severity,
-          isVenueConflict: conflict.isVenueConflict,
-          isResourceConflict: conflict.isResourceConflict,
-          isBranchConflict: conflict.isBranchConflict,
-          reasonsA: conflict.reasons,
-          reasonsB: getConflictDetails(driveB, driveA).reasons
+/**
+ * Detects all deterministic scheduling conflicts from MySQL-backed schedules.
+ * - Same venue + overlapping time + same date = Critical
+ * - Shared assigned resource + overlapping time + same date = High
+ * - Shared eligible branch + overlapping time + same date = Medium
+ *
+ * @returns {Promise<Array>} Array of conflict objects.
+ */
+export async function detectScheduleConflicts() {
+  const { effectiveSchedules } = await getEffectiveSchedules();
+  const conflicts = [];
+  const processedPairs = new Set();
+
+  for (let i = 0; i < effectiveSchedules.length; i++) {
+    for (let j = i + 1; j < effectiveSchedules.length; j++) {
+      const schA = effectiveSchedules[i];
+      const schB = effectiveSchedules[j];
+
+      // Exclude comparisons between rounds of the very same drive
+      if (schA.driveId === schB.driveId) continue;
+
+      // Must occur on the exact same calendar date
+      if (schA.date !== schB.date) continue;
+
+      // Must have overlapping time windows
+      if (!isTimeOverlapping(schA.startTime, schA.endTime, schB.startTime, schB.endTime)) {
+        continue;
+      }
+
+      const pairKey = [schA.id, schB.id].sort().join(':::');
+      if (processedPairs.has(pairKey)) continue;
+
+      // 1. Same Venue clash (Critical)
+      const venueA = (schA.venue || '').trim().toLowerCase();
+      const venueB = (schB.venue || '').trim().toLowerCase();
+      const isVenueClash = venueA && venueB && venueA === venueB && venueA !== 'tbd';
+
+      // 2. Shared Resource clash (High)
+      const resA = (schA.assignedResources || []).map((r) => r.trim().toLowerCase());
+      const resB = (schB.assignedResources || []).map((r) => r.trim().toLowerCase());
+      const sharedResources = (schA.assignedResources || []).filter((r) =>
+        resB.includes(r.trim().toLowerCase())
+      );
+
+      // 3. Shared Branch clash (Medium)
+      const branchA = (schA.eligibleBranches || []).map((b) => b.trim().toUpperCase());
+      const branchB = (schB.eligibleBranches || []).map((b) => b.trim().toUpperCase());
+      const sharedBranches = (schA.eligibleBranches || []).filter((b) =>
+        branchB.includes(b.trim().toUpperCase())
+      );
+
+      if (isVenueClash || sharedResources.length > 0 || sharedBranches.length > 0) {
+        processedPairs.add(pairKey);
+
+        let severity = 'Medium';
+        let conflictType = 'Branch Contention';
+        let description = `Concurrent drives on ${schA.date} split eligible candidates from branches: ${sharedBranches.join(', ')}.`;
+
+        if (isVenueClash) {
+          severity = 'Critical';
+          conflictType = 'Venue Overlap';
+          description = `Double-booking at ${schA.venue} between ${schA.company} and ${schB.company}.`;
+        } else if (sharedResources.length > 0) {
+          severity = 'High';
+          conflictType = 'Resource Contention';
+          description = `Logistical resource contention for: ${sharedResources.join(', ')}.`;
+        }
+
+        conflicts.push({
+          id: `CONF-${schA.id}-${schB.id}`,
+          severity,
+          conflictType,
+          date: schA.date,
+          timeSlot: `${schA.startTime} - ${schA.endTime} vs ${schB.startTime} - ${schB.endTime}`,
+          description,
+          reason: description,
+          affectedDrives: [
+            {
+              driveId: schA.driveId,
+              company: schA.company,
+              role: schA.role,
+              roundName: schA.roundName,
+              venue: schA.venue,
+              startTime: schA.startTime,
+              endTime: schA.endTime
+            },
+            {
+              driveId: schB.driveId,
+              company: schB.company,
+              role: schB.role,
+              roundName: schB.roundName,
+              venue: schB.venue,
+              startTime: schB.startTime,
+              endTime: schB.endTime
+            }
+          ],
+          conflictingResources: sharedResources,
+          conflictingBranches: sharedBranches
         });
-
-        // Register on drive A
-        const recordA = driveConflictMap.get(driveA.id);
-        recordA.conflictingDriveIds.add(driveB.id);
-        conflict.reasons.forEach((r) => recordA.reasons.push(r));
-        if (SEVERITY_WEIGHT[conflict.severity] > SEVERITY_WEIGHT[recordA.highestSeverity]) {
-          recordA.highestSeverity = conflict.severity;
-        }
-
-        // Register on drive B
-        const recordB = driveConflictMap.get(driveB.id);
-        recordB.conflictingDriveIds.add(driveA.id);
-        getConflictDetails(driveB, driveA).reasons.forEach((r) => recordB.reasons.push(r));
-        if (SEVERITY_WEIGHT[conflict.severity] > SEVERITY_WEIGHT[recordB.highestSeverity]) {
-          recordB.highestSeverity = conflict.severity;
-        }
       }
     }
   }
 
-  // Count unique pair metrics classified into exactly one primary dominant category
-  let criticalConflicts = 0;
-  let highConflicts = 0;
-  let mediumConflicts = 0;
-  let venueConflicts = 0;
-  let resourceConflicts = 0;
-  let branchConflicts = 0;
+  const severityOrder = { Critical: 3, High: 2, Medium: 1 };
+  conflicts.sort((a, b) => (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0));
 
-  for (const pair of pairConflictMap.values()) {
-    if (pair.severity === "Critical") {
-      criticalConflicts++;
-      venueConflicts++;
-    } else if (pair.severity === "High") {
-      highConflicts++;
-      resourceConflicts++;
-    } else if (pair.severity === "Medium") {
-      mediumConflicts++;
-      branchConflicts++;
-    }
+  return conflicts;
+}
+
+/**
+ * Returns scheduling details and any detected conflicts for a specific placement drive.
+ * @param {string} driveId - Placement Drive ID
+ * @returns {Promise<Object|null>}
+ */
+export async function getDriveConflictDetails(driveId) {
+  if (!driveId) return null;
+
+  const drive = await driveRepository.findDriveById(driveId);
+  if (!drive) return null;
+
+  let rounds = await schedulerRepository.findSchedulesByDriveId(driveId);
+
+  // Fallback to drive-level schedule if no drive_schedules records exist yet
+  if (rounds.length === 0 && drive.date) {
+    rounds = [
+      {
+        id: `TEMP-SCH-${drive.id}`,
+        driveId: drive.id,
+        roundName: 'Recruitment Drive',
+        roundNumber: 1,
+        date: drive.date,
+        startTime: drive.startTime || '09:30',
+        endTime: drive.endTime || '17:00',
+        venue: drive.venue || 'Campus Center',
+        assignedResources: drive.requiredResources || [],
+        status: drive.status || 'Scheduled',
+        company: drive.company,
+        role: drive.role,
+        eligibleBranches: drive.eligibleBranches || []
+      }
+    ];
   }
 
-  const enrichedDrives = allDrives.map((drive) => {
-    const analysis = driveConflictMap.get(drive.id);
-    const hasConflict = analysis.conflictingDriveIds.size > 0;
-    const conflictingDriveIds = Array.from(analysis.conflictingDriveIds).sort();
-
-    return {
-      id: drive.id,
-      company: drive.company,
-      role: drive.role,
-      date: drive.date,
-      startTime: drive.startTime,
-      endTime: drive.endTime,
-      venue: drive.venue,
-      requiredResources: drive.requiredResources,
-      eligibleBranches: drive.eligibleBranches,
-      status: drive.status,
-      packageLPA: drive.packageLPA,
-      openings: drive.openings,
-      applicants: drive.applicants,
-      shortlisted: drive.shortlisted,
-      description: drive.description,
-      conflictSeverity: analysis.highestSeverity,
-      hasConflict,
-      conflictReasons: analysis.reasons,
-      conflictingDriveIds
-    };
-  });
-
-  // Sort: 1. Severity descending, 2. Date ascending, 3. startTime ascending, 4. ID ascending
-  enrichedDrives.sort((a, b) => {
-    const weightDiff = SEVERITY_WEIGHT[b.conflictSeverity] - SEVERITY_WEIGHT[a.conflictSeverity];
-    if (weightDiff !== 0) return weightDiff;
-
-    const dateDiff = a.date.localeCompare(b.date);
-    if (dateDiff !== 0) return dateDiff;
-
-    const timeDiff = a.startTime.localeCompare(b.startTime);
-    if (timeDiff !== 0) return timeDiff;
-
-    return a.id.localeCompare(b.id);
-  });
-
-  const conflictAffectedDrives = enrichedDrives.filter((d) => d.hasConflict).length;
-  const conflictFreeDrives = enrichedDrives.length - conflictAffectedDrives;
-
-  return {
-    totalDrives: enrichedDrives.length,
-    conflictAffectedDrives,
-    conflictFreeDrives,
-    conflictPairs: pairConflictMap.size,
-    criticalConflicts,
-    highConflicts,
-    mediumConflicts,
-    venueConflicts,
-    resourceConflicts,
-    branchConflicts,
-    drives: enrichedDrives
-  };
-};
-
-/**
- * Returns complete conflict analysis for all drives
- */
-export const detectScheduleConflicts = (allDrives = drives) => {
-  return getConflictAnalysis(allDrives);
-};
-
-/**
- * Returns detailed conflict status and list of conflicting drives for a single drive ID
- */
-export const getDriveConflictDetails = (driveId, allDrives = drives) => {
-  const normalizedId = driveId.trim().toUpperCase();
-  const analysis = getConflictAnalysis(allDrives);
-  const targetDrive = analysis.drives.find((d) => d.id.toUpperCase() === normalizedId);
-
-  if (!targetDrive) return null;
-
-  const conflictingDrives = analysis.drives.filter((d) =>
-    targetDrive.conflictingDriveIds.includes(d.id)
+  const allConflicts = await detectScheduleConflicts();
+  const driveConflicts = allConflicts.filter((c) =>
+    c.affectedDrives.some((d) => d.driveId.toUpperCase() === driveId.toUpperCase())
   );
 
   return {
-    drive: {
-      id: targetDrive.id,
-      company: targetDrive.company,
-      role: targetDrive.role,
-      date: targetDrive.date,
-      startTime: targetDrive.startTime,
-      endTime: targetDrive.endTime,
-      venue: targetDrive.venue,
-      requiredResources: targetDrive.requiredResources,
-      eligibleBranches: targetDrive.eligibleBranches,
-      status: targetDrive.status,
-      packageLPA: targetDrive.packageLPA,
-      openings: targetDrive.openings,
-      applicants: targetDrive.applicants,
-      shortlisted: targetDrive.shortlisted,
-      description: targetDrive.description
-    },
-    hasConflict: targetDrive.hasConflict,
-    conflictSeverity: targetDrive.conflictSeverity,
-    conflictingDrives,
-    conflictReasons: targetDrive.conflictReasons
+    driveId: drive.id,
+    company: drive.company,
+    role: drive.role,
+    packageLPA: drive.packageLPA,
+    status: drive.status,
+    schedule: rounds,
+    hasConflicts: driveConflicts.length > 0,
+    conflictCount: driveConflicts.length,
+    conflicts: driveConflicts
   };
-};
+}
 
 /**
- * Validates whether a proposed drive schedule triggers any venue, resource, or branch conflicts
+ * Finds alternative non-conflicting slots for a drive.
+ * @param {string} driveId - Placement Drive ID
+ * @returns {Promise<Object|null>}
  */
-const hasAnyConflictForSlot = (candidateDrive, otherDrives) => {
-  for (const other of otherDrives) {
-    if (candidateDrive.id === other.id) continue;
-    if (getConflictDetails(candidateDrive, other)) {
-      return true;
+export async function findAlternativeSlots(driveId) {
+  if (!driveId) return null;
+
+  const driveDetails = await getDriveConflictDetails(driveId);
+  if (!driveDetails) return null;
+
+  const { effectiveSchedules } = await getEffectiveSchedules();
+
+  const CANDIDATE_VENUES = [
+    'Seminar Hall A',
+    'Seminar Hall B',
+    'Auditorium Stage',
+    'Lab 2 (60 systems)',
+    'Placement Cell Boardroom'
+  ];
+
+  const CANDIDATE_TIMES = [
+    { startTime: '09:00', endTime: '12:30' },
+    { startTime: '13:30', endTime: '17:00' },
+    { startTime: '10:00', endTime: '13:30' }
+  ];
+
+  const baseDateStr = driveDetails.schedule[0]?.date || '2026-10-15';
+  const baseDate = new Date(baseDateStr);
+
+  const testDates = [
+    baseDateStr,
+    new Date(baseDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    new Date(baseDate.getTime() + 48 * 60 * 60 * 1000).toISOString().split('T')[0],
+    new Date(baseDate.getTime() + 72 * 60 * 60 * 1000).toISOString().split('T')[0]
+  ];
+
+  const alternatives = [];
+
+  for (const date of testDates) {
+    for (const slot of CANDIDATE_TIMES) {
+      for (const venue of CANDIDATE_VENUES) {
+        const isClashing = effectiveSchedules.some((sch) => {
+          if (sch.driveId === driveId) return false;
+          if (sch.date !== date) return false;
+
+          const timeOverlap = isTimeOverlapping(
+            slot.startTime,
+            slot.endTime,
+            sch.startTime,
+            sch.endTime
+          );
+          const venueOverlap = (sch.venue || '').toLowerCase() === venue.toLowerCase();
+
+          return timeOverlap && venueOverlap;
+        });
+
+        if (!isClashing) {
+          alternatives.push({
+            date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            venue,
+            availableCapacity: 120,
+            status: 'Available',
+            recommendationScore: date === baseDateStr ? 95 : 80
+          });
+        }
+
+        if (alternatives.length >= 4) break;
+      }
+      if (alternatives.length >= 4) break;
     }
-  }
-  return false;
-};
-
-/**
- * Finds alternative venues and standard time slots for a given drive
- */
-export const findAlternativeSlots = (driveId, allDrives = drives) => {
-  const normalizedId = driveId.trim().toUpperCase();
-  const currentDrive = allDrives.find((d) => d.id.toUpperCase() === normalizedId);
-
-  if (!currentDrive) return null;
-
-  const otherDrives = allDrives.filter((d) => d.id.toUpperCase() !== normalizedId);
-
-  // A. Alternative venues (same date, same time)
-  const validAlternativeVenues = [];
-  for (const venue of campusVenues) {
-    if (venue.trim().toLowerCase() === currentDrive.venue.trim().toLowerCase()) {
-      continue;
-    }
-
-    const candidate = {
-      ...currentDrive,
-      venue
-    };
-
-    if (!hasAnyConflictForSlot(candidate, otherDrives)) {
-      validAlternativeVenues.push({
-        date: currentDrive.date,
-        startTime: currentDrive.startTime,
-        endTime: currentDrive.endTime,
-        venue,
-        conflictFree: true
-      });
-    }
-
-    if (validAlternativeVenues.length === 3) break;
-  }
-
-  // B. Alternative standard time slots (same date, same venue)
-  const validAlternativeTimeSlots = [];
-  for (const slot of standardTimeSlots) {
-    if (slot.startTime === currentDrive.startTime && slot.endTime === currentDrive.endTime) {
-      continue;
-    }
-
-    const candidate = {
-      ...currentDrive,
-      startTime: slot.startTime,
-      endTime: slot.endTime
-    };
-
-    if (!hasAnyConflictForSlot(candidate, otherDrives)) {
-      validAlternativeTimeSlots.push({
-        date: currentDrive.date,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        venue: currentDrive.venue,
-        conflictFree: true
-      });
-    }
-
-    if (validAlternativeTimeSlots.length === 3) break;
+    if (alternatives.length >= 4) break;
   }
 
   return {
-    driveId: currentDrive.id,
-    currentSchedule: {
-      date: currentDrive.date,
-      startTime: currentDrive.startTime,
-      endTime: currentDrive.endTime,
-      venue: currentDrive.venue
-    },
-    alternativeVenues: validAlternativeVenues,
-    alternativeTimeSlots: validAlternativeTimeSlots
+    driveId,
+    conflictsDetected: driveDetails.hasConflicts,
+    currentConflictsCount: driveDetails.conflictCount,
+    alternatives
   };
-};
+}
 
 /**
- * Returns a compact scheduler summary
+ * Returns global summary statistics of scheduled drives, rounds, and conflicts.
+ * @returns {Promise<Object>}
  */
-export const getSchedulerSummary = (allDrives = drives) => {
-  const analysis = getConflictAnalysis(allDrives);
+export async function getSchedulerSummary() {
+  const [conflicts, { effectiveSchedules, allDrives }] = await Promise.all([
+    detectScheduleConflicts(),
+    getEffectiveSchedules()
+  ]);
+
+  const scheduledDriveIds = new Set(effectiveSchedules.map((s) => s.driveId));
+
+  const critical = conflicts.filter((c) => c.severity === 'Critical').length;
+  const high = conflicts.filter((c) => c.severity === 'High').length;
+  const medium = conflicts.filter((c) => c.severity === 'Medium').length;
+
+  const venueMap = new Map();
+  effectiveSchedules.forEach((s) => {
+    const v = s.venue || 'Unspecified';
+    venueMap.set(v, (venueMap.get(v) || 0) + 1);
+  });
+
+  const venueUtilization = Array.from(venueMap.entries()).map(([venue, bookings]) => ({
+    venue,
+    bookings,
+    status: bookings >= 3 ? 'High Contention' : 'Normal'
+  }));
+
+  const resourceMap = new Map();
+  effectiveSchedules.forEach((s) => {
+    (s.assignedResources || []).forEach((res) => {
+      resourceMap.set(res, (resourceMap.get(res) || 0) + 1);
+    });
+  });
+
+  const resourceUtilization = Array.from(resourceMap.entries()).map(([resource, bookings]) => ({
+    resource,
+    bookings,
+    contentionLevel: bookings > 2 ? 'High' : 'Low'
+  }));
 
   return {
-    totalDrives: analysis.totalDrives,
-    conflictAffectedDrives: analysis.conflictAffectedDrives,
-    conflictFreeDrives: analysis.conflictFreeDrives,
-    criticalConflicts: analysis.criticalConflicts,
-    highConflicts: analysis.highConflicts,
-    mediumConflicts: analysis.mediumConflicts,
-    venueConflicts: analysis.venueConflicts,
-    resourceConflicts: analysis.resourceConflicts,
-    branchConflicts: analysis.branchConflicts
+    totalScheduledDrives: scheduledDriveIds.size || allDrives.length,
+    totalRounds: effectiveSchedules.length,
+    totalConflicts: conflicts.length,
+    conflictBreakdown: {
+      critical,
+      high,
+      medium
+    },
+    criticalConflicts: critical,
+    highConflicts: high,
+    mediumConflicts: medium,
+    venueUtilization,
+    resourceUtilization
   };
-};
+}

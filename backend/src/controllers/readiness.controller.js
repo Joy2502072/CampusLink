@@ -1,33 +1,50 @@
-import { analyzeStudentReadiness } from '../services/readiness.service.js';
+import * as readinessService from '../services/readiness.service.js';
 import { sendResponse } from '../utils/response.js';
 
 /**
- * GET /api/readiness/student/:studentId
- * Perform deterministic explainable readiness analysis for a student profile
+ * GET /api/readiness/at-risk
+ * Retrieves at-risk student intervention cohort evaluated from MySQL data.
  */
-export const getStudentReadinessAnalysis = (req, res, next) => {
+export async function getAtRiskStudentsCohort(req, res, next) {
+  try {
+    const data = await readinessService.getAtRiskStudents();
+    return sendResponse(res, 200, true, 'At-risk students evaluated successfully from MySQL data', data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * GET /api/readiness/cohort
+ * Retrieves aggregate readiness distribution across student cohort.
+ */
+export async function getCohortReadiness(req, res, next) {
+  try {
+    const data = await readinessService.getCohortReadiness();
+    return sendResponse(res, 200, true, 'Cohort readiness metrics retrieved successfully', data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * GET /api/readiness/:studentId
+ * Retrieves detailed readiness report for a specific student.
+ */
+export async function getStudentReadinessById(req, res, next) {
   try {
     const { studentId } = req.params;
-
-    if (!studentId || typeof studentId !== 'string' || !studentId.trim()) {
-      return sendResponse(res, 400, false, 'Invalid student ID parameter provided');
+    if (!studentId || !studentId.trim()) {
+      return sendResponse(res, 400, false, 'Invalid student ID parameter');
     }
 
-    const normalizedId = studentId.trim().toUpperCase();
-    const analysis = analyzeStudentReadiness(normalizedId);
-
-    if (!analysis) {
-      return sendResponse(res, 404, false, `Student ${normalizedId} not found.`);
+    const data = await readinessService.getStudentReadiness(studentId.trim());
+    if (!data) {
+      return sendResponse(res, 404, false, `Student with ID ${studentId} not found`);
     }
 
-    return sendResponse(
-      res,
-      200,
-      true,
-      'Student readiness analysis fetched successfully',
-      analysis
-    );
+    return sendResponse(res, 200, true, 'Student readiness evaluation retrieved successfully', data);
   } catch (error) {
-    next(error);
+    return next(error);
   }
-};
+}

@@ -1,136 +1,347 @@
-import React from 'react';
-import { CheckCircle2, RefreshCw, MapPin, Clock } from 'lucide-react';
-import { findAlternativeSlots } from '../../data/mockPlacementData';
+import React, { useEffect, useState } from 'react';
+import {
+  CheckCircle2,
+  RefreshCw,
+  MapPin,
+  Clock
+} from 'lucide-react';
 
-export default function ConflictResolution({ drive, allDrives, onActionTrigger }) {
+const API_BASE = 'http://localhost:5000/api';
+
+const API_HEADERS = {
+  'X-Demo-User-Role': 'placement_officer'
+};
+
+export default function ConflictResolution({
+  drive,
+  onActionTrigger
+}) {
+  const [alternatives, setAlternatives] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!drive?.hasConflict) {
+      setAlternatives([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAlternatives = async () => {
+      try {
+        setLoading(true);
+
+        const response = await fetch(
+          `${API_BASE}/scheduler/alternatives/${drive.driveId}`,
+          {
+            headers: API_HEADERS
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            'Failed to load alternative schedule slots.'
+          );
+        }
+
+        const result = await response.json();
+
+        if (!cancelled) {
+          setAlternatives(
+            result?.data?.alternatives || []
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Alternative schedule API error:',
+          error
+        );
+
+        if (!cancelled) {
+          setAlternatives([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAlternatives();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drive]);
+
   if (!drive) return null;
 
   if (!drive.hasConflict) {
     return (
-      <div style={{
-        backgroundColor: 'var(--accent-emerald-soft)',
-        border: '1px solid rgba(16, 185, 129, 0.3)',
-        borderRadius: '10px',
-        padding: '14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }}>
-        <CheckCircle2 size={18} color="var(--accent-emerald)" aria-hidden="true" style={{ flexShrink: 0 }} />
+      <div
+        style={{
+          backgroundColor:
+            'var(--accent-emerald-soft)',
+          border:
+            '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: '10px',
+          padding: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}
+      >
+        <CheckCircle2
+          size={18}
+          color="var(--accent-emerald)"
+        />
+
         <div>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ffffff' }}>
+          <div
+            style={{
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: '#ffffff'
+            }}
+          >
             Schedule Is Conflict-Free
           </div>
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-            No venue overlaps, infrastructure collisions, or branch conflicts detected for this booking.
+
+          <div
+            style={{
+              fontSize: '0.74rem',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            No venue, resource, or branch conflict was
+            detected for this schedule.
           </div>
         </div>
       </div>
     );
   }
 
-  const { recommendedVenues, recommendedTimeSlots } = findAlternativeSlots(drive, allDrives);
+  const venueAlternatives = [];
+  const timeAlternatives = [];
+
+  alternatives.forEach((alternative) => {
+    if (
+      alternative.venue &&
+      !venueAlternatives.some(
+        (item) => item.venue === alternative.venue
+      )
+    ) {
+      venueAlternatives.push(alternative);
+    }
+
+    if (
+      alternative.startTime &&
+      alternative.endTime &&
+      !timeAlternatives.some(
+        (item) =>
+          item.startTime === alternative.startTime &&
+          item.endTime === alternative.endTime
+      )
+    ) {
+      timeAlternatives.push(alternative);
+    }
+  });
 
   return (
-    <div style={{
-      backgroundColor: 'rgba(15, 23, 42, 0.7)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '12px',
-      padding: '16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '14px'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <RefreshCw size={16} color="var(--accent-blue)" aria-hidden="true" />
-        <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#ffffff' }}>
-          Deterministic Resolution Recommendations
+    <div
+      style={{
+        backgroundColor:
+          'rgba(15, 23, 42, 0.7)',
+        border:
+          '1px solid var(--border-color)',
+        borderRadius: '12px',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}
+      >
+        <RefreshCw
+          size={16}
+          color="var(--accent-blue)"
+        />
+
+        <h4
+          style={{
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            color: '#ffffff'
+          }}
+        >
+          AI Scheduler Resolution Recommendations
         </h4>
       </div>
 
-      {/* Recommended Alternative Venues */}
-      <div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-          fontSize: '0.74rem',
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          marginBottom: '8px'
-        }}>
-          <MapPin size={13} aria-hidden="true" />
-          <span>Available Conflict-Free Venues on {drive.date} ({drive.startTime}–{drive.endTime}):</span>
+      {loading ? (
+        <div
+          style={{
+            fontSize: '0.74rem',
+            color: 'var(--text-muted)'
+          }}
+        >
+          Finding conflict-free alternatives...
         </div>
-        {recommendedVenues && recommendedVenues.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {recommendedVenues.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => onActionTrigger(`Demo Action: Relocated ${drive.driveId} (${drive.company}) to ${v}.`)}
-                style={{
-                  fontSize: '0.72rem',
-                  padding: '5px 10px',
-                  borderRadius: '6px',
-                  backgroundColor: 'var(--accent-blue-soft)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  color: 'var(--accent-blue)',
-                  fontWeight: 600
-                }}
-              >
-                Switch to {v} (Demo)
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            No unreserved alternative campus venues pass all conflict checks during this specific time window.
-          </div>
-        )}
-      </div>
+      ) : (
+        <>
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '8px'
+              }}
+            >
+              <MapPin size={13} />
+              <span>
+                Available conflict-free venues
+              </span>
+            </div>
 
-      {/* Recommended Alternative Time Slots */}
-      <div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-          fontSize: '0.74rem',
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
-          marginBottom: '8px'
-        }}>
-          <Clock size={13} aria-hidden="true" />
-          <span>Alternative Non-Conflicting Slots for {drive.venue} on {drive.date}:</span>
-        </div>
-        {recommendedTimeSlots && recommendedTimeSlots.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {recommendedTimeSlots.map((slot) => (
-              <button
-                key={slot.label}
-                type="button"
-                onClick={() => onActionTrigger(`Demo Action: Rescheduled ${drive.driveId} (${drive.company}) to ${slot.label}.`)}
+            {venueAlternatives.length > 0 ? (
+              <div
                 style={{
-                  textAlign: 'left',
-                  fontSize: '0.72rem',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  fontWeight: 500
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px'
                 }}
               >
-                Reschedule to {slot.label} (Demo)
-              </button>
-            ))}
+                {venueAlternatives.map(
+                  (alternative) => (
+                    <button
+                      key={`${alternative.date}-${alternative.startTime}-${alternative.venue}`}
+                      type="button"
+                      onClick={() =>
+                        onActionTrigger(
+                          `Recommended venue selected: ${alternative.venue} for ${drive.driveId}.`
+                        )
+                      }
+                      style={{
+                        fontSize: '0.72rem',
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        backgroundColor:
+                          'var(--accent-blue-soft)',
+                        border:
+                          '1px solid rgba(59, 130, 246, 0.3)',
+                        color:
+                          'var(--accent-blue)',
+                        fontWeight: 600
+                      }}
+                    >
+                      {alternative.venue}
+                    </button>
+                  )
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                No alternative venue found.
+              </div>
+            )}
           </div>
-        ) : (
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            No standard open slots remain on {drive.date} that satisfy all venue, resource, and branch constraints.
+
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                marginBottom: '8px'
+              }}
+            >
+              <Clock size={13} />
+              <span>
+                Alternative time slots
+              </span>
+            </div>
+
+            {timeAlternatives.length > 0 ? (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}
+              >
+                {timeAlternatives.map(
+                  (alternative) => (
+                    <button
+                      key={`${alternative.date}-${alternative.startTime}-${alternative.endTime}-${alternative.venue}`}
+                      type="button"
+                      onClick={() =>
+                        onActionTrigger(
+                          `Recommended time selected: ${alternative.startTime}–${alternative.endTime} for ${drive.driveId}.`
+                        )
+                      }
+                      style={{
+                        textAlign: 'left',
+                        fontSize: '0.72rem',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        backgroundColor:
+                          'rgba(255, 255, 255, 0.04)',
+                        border:
+                          '1px solid var(--border-color)',
+                        color:
+                          'var(--text-primary)',
+                        fontWeight: 500
+                      }}
+                    >
+                      {alternative.date} •{' '}
+                      {alternative.startTime}–
+                      {alternative.endTime} •{' '}
+                      {alternative.venue}
+                    </button>
+                  )
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                No alternative time slot found.
+              </div>
+            )}
           </div>
-        )}
+        </>
+      )}
+
+      <div
+        style={{
+          fontSize: '0.68rem',
+          color: 'var(--text-muted)',
+          paddingTop: '4px'
+        }}
+      >
+        Recommendations are generated from the current
+        scheduler database state.
       </div>
     </div>
   );

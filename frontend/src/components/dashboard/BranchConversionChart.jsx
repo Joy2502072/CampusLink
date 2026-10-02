@@ -16,7 +16,12 @@ export default function BranchConversionChart({ data, loading }) {
           minHeight: '320px'
         }}
       >
-        <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.875rem' }}>
+        <span
+          style={{
+            color: 'var(--text-muted, #64748b)',
+            fontSize: '0.875rem'
+          }}
+        >
           Loading branch analytics...
         </span>
       </div>
@@ -41,10 +46,33 @@ export default function BranchConversionChart({ data, loading }) {
     >
       {/* Header */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            marginBottom: '6px'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
             <Award size={18} color="var(--accent-blue, #6366f1)" />
-            <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #ffffff)', letterSpacing: '-0.01em' }}>
+
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '1rem',
+                fontWeight: 700,
+                color: 'var(--text-primary, #ffffff)',
+                letterSpacing: '-0.01em'
+              }}
+            >
               Branch Conversion Comparison
             </h2>
           </div>
@@ -70,36 +98,101 @@ export default function BranchConversionChart({ data, loading }) {
           </span>
         </div>
 
-        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)' }}>
-          Placement conversion rates and average packages across engineering departments
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary, #94a3b8)'
+          }}
+        >
+          Placement conversion rates and average packages across engineering
+          departments
         </p>
       </div>
 
       {/* Department Conversion Progress Bars */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px'
+        }}
+      >
         {branches.length > 0 ? (
           branches.map((b) => {
             const rate = Number(b.placementRate ?? 0);
             const total = Number(b.totalStudents ?? 0);
             const placed = Number(b.placedStudents ?? 0);
-            const avgPkg = b.averagePackageLPA || '0 LPA';
+
+            const avgPkg = Number(b.averagePackageLPA ?? 0);
+            const formattedAvgPkg = `${avgPkg.toFixed(2)} LPA`;
 
             return (
-              <div key={b.branch} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ color: 'var(--text-primary, #f1f5f9)', fontWeight: 600 }}>
+              <div
+                key={b.branch}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.8125rem'
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: 'var(--text-primary, #f1f5f9)',
+                        fontWeight: 600
+                      }}
+                    >
                       {b.branch}
                     </span>
-                    <span style={{ color: 'var(--text-muted, #64748b)', fontSize: '0.75rem' }}>
+
+                    <span
+                      style={{
+                        color: 'var(--text-muted, #64748b)',
+                        fontSize: '0.75rem'
+                      }}
+                    >
                       ({placed}/{total} placed)
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '0.75rem' }}>
-                      Avg: <strong style={{ color: 'var(--text-primary, #e2e8f0)' }}>{avgPkg}</strong>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: 'var(--text-secondary, #94a3b8)',
+                        fontSize: '0.75rem'
+                      }}
+                    >
+                      Avg:{' '}
+                      <strong
+                        style={{
+                          color: 'var(--text-primary, #e2e8f0)'
+                        }}
+                      >
+                        {formattedAvgPkg}
+                      </strong>
                     </span>
+
                     <span
                       style={{
                         color: 'var(--accent-blue, #818cf8)',
@@ -109,7 +202,7 @@ export default function BranchConversionChart({ data, loading }) {
                         textAlign: 'right'
                       }}
                     >
-                      {rate}%
+                      {rate.toFixed(2)}%
                     </span>
                   </div>
                 </div>
@@ -130,7 +223,7 @@ export default function BranchConversionChart({ data, loading }) {
                 >
                   <div
                     style={{
-                      width: `${Math.min(rate, 100)}%`,
+                      width: `${Math.min(Math.max(rate, 0), 100)}%`,
                       height: '100%',
                       backgroundColor: 'var(--accent-blue, #6366f1)',
                       borderRadius: '999px',
@@ -142,13 +235,20 @@ export default function BranchConversionChart({ data, loading }) {
             );
           })
         ) : (
-          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--text-muted, #64748b)',
+              fontStyle: 'italic'
+            }}
+          >
             No branch placement data available.
           </p>
         )}
       </div>
 
-      {/* Footer Benchmark Note */}
+      {/* Footer */}
       <div
         style={{
           paddingTop: '12px',
@@ -161,6 +261,7 @@ export default function BranchConversionChart({ data, loading }) {
         }}
       >
         <span>Ranked by placement conversion rate</span>
+
         <span>{branches.length} departments recorded</span>
       </div>
     </div>

@@ -1,52 +1,46 @@
 import React, { useState } from 'react';
-import Layout from './components/layout/Layout';
-import DashboardHome from './components/dashboard/DashboardHome';
-import AtRiskStudents from './components/atRisk/AtRiskStudents';
-import SchedulerOverview from './components/scheduler/SchedulerOverview';
-import CommunicationHub from './components/communication/CommunicationHub';
-import StudentReadiness from './components/readiness/StudentReadiness';
-import StudentJobMatching from './components/matching/StudentJobMatching';
-import SkillGapAnalysis from './components/skillGap/SkillGapAnalysis';
-import PlaceholderView from './components/common/PlaceholderView';
+import Layout from './components/layout/Layout.jsx';
+import DashboardHome from './components/dashboard/DashboardHome.jsx';
+import StudentPortal from './components/studentPortal/StudentPortal.jsx';
+import AtRiskStudents from './components/atRisk/AtRiskStudents.jsx';
+import SchedulerOverview from './components/scheduler/SchedulerOverview.jsx';
+import CommunicationHub from './components/communication/CommunicationHub.jsx';
+import StudentReadiness from './components/readiness/StudentReadiness.jsx';
+import StudentJobMatching from './components/matching/StudentJobMatching.jsx';
+import SkillGapAnalysis from './components/skillGap/SkillGapAnalysis.jsx';
+import PlaceholderView from './components/common/PlaceholderView.jsx';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const renderContent = () => {
+  const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardHome searchTerm={searchTerm} />;
-
+        return <DashboardHome />;
+      case 'student-portal':
+        return <StudentPortal onNavigate={setActiveTab} />;
       case 'at-risk':
         return <AtRiskStudents />;
-
       case 'readiness':
         return <StudentReadiness />;
-
       case 'matching':
         return <StudentJobMatching />;
-
       case 'skill-gap':
         return <SkillGapAnalysis />;
-
       case 'drives':
         return <SchedulerOverview />;
-
+      case 'communication':
+        return <CommunicationHub />;
       case 'analytics':
         return (
           <PlaceholderView
             title="Advanced Placement Analytics"
-            description="Deep cohort segmentation, company tiers (Dream, Super Dream, Regular), and recruiter retention curves will be available here in a future release."
-            onBackToDashboard={() => setActiveTab('dashboard')}
+            description="Deep cohort segmentation, company tiers, and recruiter retention analytics will be available here."
           />
         );
-
-      case 'communication':
-        return <CommunicationHub />;
-
       default:
-        return <DashboardHome searchTerm={searchTerm} />;
+        return <DashboardHome />;
     }
   };
 
@@ -57,7 +51,7 @@ export default function App() {
       searchTerm={searchTerm}
       onSearchChange={setSearchTerm}
     >
-      {renderContent()}
+      {renderActiveView()}
     </Layout>
   );
 }

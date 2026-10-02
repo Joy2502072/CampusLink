@@ -1,5 +1,9 @@
-import { Router } from 'express';
+import express from 'express';
+
 import {
+  sendNotification,
+  saveDraft,
+  scheduleNotification,
   getAllNotifications,
   getNotificationSummary,
   getTargetedNotifications,
@@ -11,21 +15,44 @@ import {
   getNotificationById
 } from '../controllers/notification.controller.js';
 
-const router = Router();
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
 
-// Static routes declared first to avoid path collisions
+const router = express.Router();
+
+// Authentication for all notification routes
+router.use(authenticate);
+
+// Write operations
+router.post(
+  '/',
+  authorize('placement_officer', 'admin'),
+  sendNotification
+);
+
+router.post(
+  '/draft',
+  authorize('placement_officer', 'admin'),
+  saveDraft
+);
+
+router.post(
+  '/schedule',
+  authorize('placement_officer', 'admin'),
+  scheduleNotification
+);
+
+// Read operations
 router.get('/', getAllNotifications);
 router.get('/summary', getNotificationSummary);
 router.get('/targeted', getTargetedNotifications);
 
-// Specialized filter routes
 router.get('/type/:type', getNotificationsByType);
 router.get('/priority/:priority', getNotificationsByPriority);
 router.get('/status/:status', getNotificationsByStatus);
 router.get('/audience/:audience', getNotificationsByAudience);
 router.get('/branch/:branch', getNotificationsByBranch);
 
-// Dynamic parameter route
 router.get('/:id', getNotificationById);
 
 export default router;

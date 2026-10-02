@@ -1,113 +1,232 @@
 import React from 'react';
-import { Info } from 'lucide-react';
 
-export default function RiskDistribution({ students }) {
-  const total = students.length || 1;
-  const high = students.filter(s => s.riskLevel === 'High').length;
-  const medium = students.filter(s => s.riskLevel === 'Medium').length;
-  const low = students.filter(s => s.riskLevel === 'Low').length;
+export default function RiskDistribution({ students = [] }) {
+  const highRisk = students.filter(
+    (student) => student.riskLevel === 'High Risk'
+  ).length;
 
-  const highPct = ((high / total) * 100).toFixed(1);
-  const medPct = ((medium / total) * 100).toFixed(1);
-  const lowPct = ((low / total) * 100).toFixed(1);
+  const mediumRisk = students.filter(
+    (student) => student.riskLevel === 'Medium Risk'
+  ).length;
+
+  const lowRisk = students.filter(
+    (student) => student.riskLevel === 'Low Risk'
+  ).length;
+
+  const total = students.length;
+
+  const highPercentage = total
+    ? ((highRisk / total) * 100).toFixed(1)
+    : '0.0';
+
+  const mediumPercentage = total
+    ? ((mediumRisk / total) * 100).toFixed(1)
+    : '0.0';
+
+  const lowPercentage = total
+    ? ((lowRisk / total) * 100).toFixed(1)
+    : '0.0';
 
   return (
-    <div style={{
-      backgroundColor: 'var(--bg-card)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '14px',
-      padding: '20px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '14px'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-        <div>
-          <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#ffffff' }}>
-            Cohort Risk Profile Distribution
-          </h3>
-          <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-            Proportional breakdown of monitored cohort across prototype risk bands
-          </p>
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontSize: '0.72rem',
-          color: 'var(--text-secondary)',
-          backgroundColor: 'rgba(255, 255, 255, 0.04)',
-          padding: '4px 10px',
-          borderRadius: '6px'
-        }}>
-          <Info size={13} aria-hidden="true" />
-          <span>Total Sample: {total} Students</span>
-        </div>
-      </div>
-
+    <div
+      style={{
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '12px',
+        padding: '20px'
+      }}
+    >
+      {/* Header */}
       <div
-        role="progressbar"
-        aria-label="Risk level distribution bar"
-        aria-valuemin={0}
-        aria-valuemax={100}
         style={{
           display: 'flex',
-          height: '14px',
-          borderRadius: '9999px',
-          overflow: 'hidden',
-          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-          width: '100%',
-          gap: '2px'
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '16px',
+          gap: '12px'
         }}
       >
+        <div>
+          <h3
+            style={{
+              color: '#ffffff',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              marginBottom: '5px'
+            }}
+          >
+            Cohort Risk Profile Distribution
+          </h3>
+
+          <p
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.72rem'
+            }}
+          >
+            Proportional breakdown of monitored cohort across prototype risk
+            bands
+          </p>
+        </div>
+
         <div
-          title={`High Risk: ${high} (${highPct}%)`}
           style={{
-            width: `${highPct}%`,
-            backgroundColor: 'var(--accent-rose)',
-            transition: 'width 0.3s ease'
+            backgroundColor: 'rgba(148, 163, 184, 0.08)',
+            color: 'var(--text-secondary)',
+            padding: '7px 10px',
+            borderRadius: '6px',
+            fontSize: '0.7rem',
+            whiteSpace: 'nowrap'
           }}
-        />
-        <div
-          title={`Medium Risk: ${medium} (${medPct}%)`}
-          style={{
-            width: `${medPct}%`,
-            backgroundColor: 'var(--accent-amber)',
-            transition: 'width 0.3s ease'
-          }}
-        />
-        <div
-          title={`Low Risk: ${low} (${lowPct}%)`}
-          style={{
-            width: `${lowPct}%`,
-            backgroundColor: 'var(--accent-emerald)',
-            transition: 'width 0.3s ease'
-          }}
-        />
+        >
+          Total Sample: {total} Students
+        </div>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-        gap: '12px',
-        paddingTop: '6px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--accent-rose)' }} />
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            High Risk: <strong style={{ color: '#ffffff' }}>{high}</strong> ({highPct}%)
+      {/* Distribution Bar */}
+      <div
+        style={{
+          width: '100%',
+          height: '10px',
+          backgroundColor: '#273449',
+          borderRadius: '999px',
+          overflow: 'hidden',
+          display: 'flex'
+        }}
+      >
+        {highRisk > 0 && (
+          <div
+            style={{
+              width: `${highPercentage}%`,
+              backgroundColor: '#ef4444',
+              height: '100%'
+            }}
+          />
+        )}
+
+        {mediumRisk > 0 && (
+          <div
+            style={{
+              width: `${mediumPercentage}%`,
+              backgroundColor: '#f59e0b',
+              height: '100%'
+            }}
+          />
+        )}
+
+        {lowRisk > 0 && (
+          <div
+            style={{
+              width: `${lowPercentage}%`,
+              backgroundColor: '#10b981',
+              height: '100%'
+            }}
+          />
+        )}
+      </div>
+
+      {/* Legend */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '16px',
+          marginTop: '18px'
+        }}
+      >
+        {/* High */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#ef4444',
+              flexShrink: 0
+            }}
+          />
+
+          <span
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem'
+            }}
+          >
+            High Risk:{' '}
+            <strong style={{ color: '#ffffff' }}>
+              {highRisk}
+            </strong>{' '}
+            ({highPercentage}%)
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--accent-amber)' }} />
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            Medium Risk: <strong style={{ color: '#ffffff' }}>{medium}</strong> ({medPct}%)
+
+        {/* Medium */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#f59e0b',
+              flexShrink: 0
+            }}
+          />
+
+          <span
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem'
+            }}
+          >
+            Medium Risk:{' '}
+            <strong style={{ color: '#ffffff' }}>
+              {mediumRisk}
+            </strong>{' '}
+            ({mediumPercentage}%)
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: 'var(--accent-emerald)' }} />
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            Low Risk: <strong style={{ color: '#ffffff' }}>{low}</strong> ({lowPct}%)
+
+        {/* Low */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              flexShrink: 0
+            }}
+          />
+
+          <span
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem'
+            }}
+          >
+            Low Risk:{' '}
+            <strong style={{ color: '#ffffff' }}>
+              {lowRisk}
+            </strong>{' '}
+            ({lowPercentage}%)
           </span>
         </div>
       </div>

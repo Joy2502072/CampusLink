@@ -1,23 +1,45 @@
 import React from 'react';
-import { CalendarDays, AlertOctagon, Building2, Clock } from 'lucide-react';
+import {
+  CalendarDays,
+  AlertOctagon,
+  Building2,
+  Clock
+} from 'lucide-react';
 
-export default function SchedulerStats({ drives, campusVenues }) {
+export default function SchedulerStats({
+  drives,
+  campusVenues,
+  summary
+}) {
   const totalDrives = drives.length;
-  // Dynamic count of all drives flagged with Critical, High, or Medium conflicts
-  const conflictCount = drives.filter(d => d.hasConflict).length;
-  
-  // Calculate distinct occupied venues vs campus total
-  const occupiedVenuesCount = new Set(drives.map(d => d.venue)).size;
-  const availableVenuesCount = Math.max(0, campusVenues.length - occupiedVenuesCount);
 
-  // Target date simulation count (2026-09-28 simulated horizon)
-  const todayDrivesCount = drives.filter(d => d.date === '2026-09-28').length;
+  // Backend summary is the source of truth for conflict pairs.
+  const totalConflicts = summary?.totalConflicts ?? 0;
+
+  const occupiedVenuesCount = new Set(
+    drives
+      .map((drive) => drive.venue)
+      .filter(Boolean)
+  ).size;
+
+  const availableVenuesCount = Math.max(
+    0,
+    campusVenues.length - occupiedVenuesCount
+  );
+
+  const todayDate = new Date()
+    .toISOString()
+    .split('T')[0];
+
+  const todayDrivesCount = drives.filter(
+    (drive) => drive.date === todayDate
+  ).length;
 
   const stats = [
     {
       title: 'Total Scheduled Drives',
-      value: totalDrives,
-      subtext: 'Across 3 calendar days',
+      value: summary?.totalScheduledDrives ?? totalDrives,
+      subtext: `${summary?.totalRounds ?? totalDrives} scheduled rounds`,
       icon: CalendarDays,
       bg: 'var(--accent-blue-soft)',
       border: 'rgba(59, 130, 246, 0.3)',
@@ -25,12 +47,21 @@ export default function SchedulerStats({ drives, campusVenues }) {
     },
     {
       title: 'Active Conflicts Detected',
-      value: conflictCount,
-      subtext: 'Requires placement cell review',
+      value: totalConflicts,
+      subtext: `${totalConflicts} conflict pairs detected`,
       icon: AlertOctagon,
-      bg: conflictCount > 0 ? 'var(--accent-rose-soft)' : 'var(--accent-emerald-soft)',
-      border: conflictCount > 0 ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)',
-      color: conflictCount > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'
+      bg:
+        totalConflicts > 0
+          ? 'var(--accent-rose-soft)'
+          : 'var(--accent-emerald-soft)',
+      border:
+        totalConflicts > 0
+          ? 'rgba(244, 63, 94, 0.3)'
+          : 'rgba(16, 185, 129, 0.3)',
+      color:
+        totalConflicts > 0
+          ? 'var(--accent-rose)'
+          : 'var(--accent-emerald)'
     },
     {
       title: 'Venue Availability',
@@ -44,7 +75,7 @@ export default function SchedulerStats({ drives, campusVenues }) {
     {
       title: "Today's Active Drives",
       value: todayDrivesCount,
-      subtext: 'Date: 2026-09-28 (Simulated)',
+      subtext: `Today: ${todayDate}`,
       icon: Clock,
       bg: 'var(--accent-violet-soft)',
       border: 'rgba(139, 92, 246, 0.3)',
@@ -56,6 +87,7 @@ export default function SchedulerStats({ drives, campusVenues }) {
     <div className="dashboard-grid-cards">
       {stats.map((stat) => {
         const Icon = stat.icon;
+
         return (
           <div
             key={stat.title}
@@ -69,30 +101,62 @@ export default function SchedulerStats({ drives, campusVenues }) {
               justifyContent: 'space-between'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <span style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {stat.title}
-              </span>
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                backgroundColor: stat.bg,
-                border: `1px solid ${stat.border}`,
+            <div
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: stat.color
-              }}>
-                <Icon size={18} aria-hidden="true" />
+                justifyContent: 'space-between',
+                marginBottom: '14px'
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                {stat.title}
+              </span>
+
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  backgroundColor: stat.bg,
+                  border: `1px solid ${stat.border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: stat.color
+                }}
+              >
+                <Icon size={18} />
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.03em' }}>
+              <div
+                style={{
+                  fontSize: '1.85rem',
+                  fontWeight: 800,
+                  color: '#ffffff',
+                  letterSpacing: '-0.03em'
+                }}
+              >
                 {stat.value}
               </div>
-              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+
+              <div
+                style={{
+                  fontSize: '0.74rem',
+                  color: 'var(--text-muted)',
+                  marginTop: '4px'
+                }}
+              >
                 {stat.subtext}
               </div>
             </div>
