@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.db
+*.sqlite3
+.env
+.env.*
+backend/requirements.txt
+
+# Tests (as specified by user)
+tests/
+.pytest_cache/
+
+# IDE & OS
+.agents/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Frontend (if created later)
+node_modules/
+.next/
+out/
